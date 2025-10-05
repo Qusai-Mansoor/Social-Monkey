@@ -1,0 +1,173 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List
+from app.db.session import get_db
+from app.schemas.social import PostResponse, PostWithComments, IngestionStatus, SocialAccountResponse
+from app.models.models import SocialAccount, Post
+from app.services.twitter_service import twitter_service
+
+router = APIRouter()
+
+
+@router.get("/accounts", response_model=List[SocialAccountResponse])
+async def get_connected_accounts(
+    db: Session = Depends(get_db)
+):
+    """Get all connected social media accounts for the user"""
+    # TODO: Get user_id from authenticated user
+    user_id = 1
+    
+    accounts = db.query(SocialAccount).filter(
+        SocialAccount.user_id == user_id,
+        SocialAccount.is_active == True
+    ).all()
+    
+    return accounts
+
+
+@router.post("/ingest/{account_id}", response_model=IngestionStatus)
+async def ingest_data(
+    account_id: int,
+    max_posts: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    Ingest posts and comments from a connected social account
+    
+    Steps:
+    1. Fetch user's posts from the platform
+    2. For each post, fetch comments/replies
+    3. Preprocess all content
+    4. Store in database
+    5. Return ingestion statistics
+    """
+    # Get social account
+    social_account = db.query(SocialAccount).filter(
+        SocialAccount.id == account_id,
+        SocialAccount.is_active == True
+    ).first()
+    
+    if not social_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Social account not found"
+        )
+    
+    try:
+        if social_account.platform == "twitter":
+            # Fetch tweets
+            result = await twitter_service.fetch_user_tweets(
+                social_account=social_account,
+                db=db,
+                max_results=max_posts
+            )
+            
+            posts_fetched = result["posts_created"]
+            
+            # Fetch replies for each post
+            posts = db.query(Post).filter(
+                Post.social_account_id == account_id
+            ).all()
+            
+            total_comments = 0
+            for post in posts:
+                comments_count = await twitter_service.fetch_tweet_replies(
+                    post=post,
+                    social_account=social_account,
+                    db=db
+                )
+                total_comments += comments_count
+            
+            return IngestionStatus(
+                status="success",
+                posts_fetched=posts_fetched,
+                comments_fetched=total_comments,
+                message=f"Successfully ingested {posts_fetched} posts and {total_comments} comments"
+            )
+        
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail=f"Platform {social_account.platform} not yet supported"
+            )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to ingest data: {str(e)}"
+        )
+
+
+@router.get("/posts", response_model=List[PostResponse])
+async def get_posts(
+    account_id: int = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get posts with optional filtering by account"""
+    query = db.query(Post)
+    
+    if account_id:
+        query = query.filter(Post.social_account_id == account_id)
+    
+    posts = query.offset(skip).limit(limit).all()
+    return posts
+
+
+@router.get("/posts/{post_id}", response_model=PostWithComments)
+async def get_post_with_comments(
+    post_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific post with all its comments"""
+    post = db.query(Post).filter(Post.id == post_id).first()
+    
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found"
+        )
+    
+    return post
+
+
+@router.get("/stats")
+async def get_ingestion_stats(
+    db: Session = Depends(get_db)
+):
+    """Get overall ingestion statistics"""
+    # TODO: Get user_id from authenticated user
+    user_id = 1
+    
+    # Get user's social accounts
+    accounts = db.query(SocialAccount).filter(
+        SocialAccount.user_id == user_id
+    ).all()
+    
+    account_ids = [acc.id for acc in accounts]
+    
+    # Count posts
+    total_posts = db.query(Post).filter(
+        Post.social_account_id.in_(account_ids)
+    ).count()
+    
+    # Count preprocessed posts
+    preprocessed_posts = db.query(Post).filter(
+        Post.social_account_id.in_(account_ids),
+        Post.is_preprocessed == True
+    ).count()
+    
+    return {
+        "total_accounts": len(accounts),
+        "total_posts": total_posts,
+        "preprocessed_posts": preprocessed_posts,
+        "accounts": [
+            {
+                "id": acc.id,
+                "platform": acc.platform,
+                "username": acc.platform_username
+            }
+            for acc in accounts
+        ]
+    }
