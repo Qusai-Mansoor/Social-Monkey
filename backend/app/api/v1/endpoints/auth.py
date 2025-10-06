@@ -8,6 +8,34 @@ from app.core.security import create_access_token, get_password_hash, verify_pas
 router = APIRouter()
 
 
+# @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+# async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+#     """Register a new user"""
+#     # Check if user already exists
+#     existing_user = db.query(User).filter(
+#         (User.email == user_data.email) | (User.username == user_data.username)
+#     ).first()
+    
+#     if existing_user:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail="Email or username already registered"
+#         )
+    
+#     # Create new user
+#     hashed_password = get_password_hash(user_data.password)
+#     new_user = User(
+#         email=user_data.email,
+#         username=user_data.username,
+#         hashed_password=hashed_password
+#     )
+    
+#     db.add(new_user)
+#     db.commit()
+#     db.refresh(new_user)
+    
+#     return new_user
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
@@ -21,20 +49,32 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email or username already registered"
         )
-    
-    # Create new user
-    hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        email=user_data.email,
-        username=user_data.username,
-        hashed_password=hashed_password
-    )
-    
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    return new_user
+    try:
+        # Enforce password max length (bcrypt limit is 72 bytes)
+        password = user_data.password
+        if isinstance(password, str):
+            password_bytes = password.encode('utf-8')
+            if len(password_bytes) > 72:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Password must not exceed 72 bytes. Please use a shorter password."
+                )
+        hashed_password = get_password_hash(password)
+        new_user = User(
+            email=user_data.email,
+            username=user_data.username,
+            hashed_password=hashed_password
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return new_user
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
+        )
+
 
 
 @router.post("/login", response_model=Token)
