@@ -1,3 +1,4 @@
+import os
 import tweepy
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -12,30 +13,26 @@ class TwitterService:
     """Service for Twitter OAuth and data ingestion"""
     
     def __init__(self):
+        # Allow insecure transport for development/testing
+        os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+        
         self.client_id = settings.TWITTER_CLIENT_ID
         self.client_secret = settings.TWITTER_CLIENT_SECRET
         self.callback_url = settings.TWITTER_CALLBACK_URL
         self.bearer_token = settings.TWITTER_BEARER_TOKEN
-        self.auth_url = ""
+        self.oauth_handler = None  # Store the handler to maintain state
+
     def get_oauth_url(self, state: str = None) -> str:
-        """
-        Generate Twitter OAuth 2.0 authorization URL
-        
-        Steps to implement:
-        1. Create OAuth2UserHandler with client_id, redirect_uri, and scopes
-        2. Generate authorization URL
-        3. Return URL for user to authorize
-        
-        Scopes needed: tweet.read, users.read, offline.access
-        """
-        oauth2_user_handler = tweepy.OAuth2UserHandler(
+        """Generate Twitter OAuth 2.0 authorization URL"""
+        # Create and store the OAuth handler to maintain state
+        self.oauth_handler = tweepy.OAuth2UserHandler(
             client_id=self.client_id,
             redirect_uri=self.callback_url,
             scope=["tweet.read", "users.read", "offline.access"],
             client_secret=self.client_secret
         )
-        self.auth_url = oauth2_user_handler.get_authorization_url()
-        return self.auth_url
+        
+        return self.oauth_handler.get_authorization_url()
 
     async def handle_callback(
         self, 
@@ -43,90 +40,83 @@ class TwitterService:
         user_id: int, 
         db: Session
     ) -> SocialAccount:
-        """
-        Handle OAuth callback and exchange code for tokens
+        """Handle OAuth callback and exchange code for tokens"""
         
-        Steps:
-        1. Exchange authorization code for access token
-        2. Get user info from Twitter API
-        3. Encrypt tokens
-        4. Store in database
-        """
-        # Exchange code for token
-        oauth2_user_handler = tweepy.OAuth2UserHandler(
-            client_id=self.client_id,
-            redirect_uri=self.callback_url,
-            scope=["tweet.read", "users.read", "offline.access"],
-            client_secret=self.client_secret
-        )
         try:
-            access_token = oauth2_user_handler.fetch_token(
-                authorization_response=f"{self.callback_url}?code={code}&code_verifier=challenge&client_secret={self.client_secret}&grant_type=authorization_code&redirect_uri={self.callback_url}",
+            # Use the same OAuth handler that generated the authorization URL
+            if not self.oauth_handler:
+                # If for some reason the handler is None, create a new one
+                self.oauth_handler = tweepy.OAuth2UserHandler(
+                    client_id=self.client_id,
+                    redirect_uri=self.callback_url,
+                    scope=["tweet.read", "users.read", "offline.access"],
+                    client_secret=self.client_secret
+                )
+            
+            # Simple approach: just pass the full callback URL with the code
+            authorization_response_url = f"{self.callback_url}?code={code}"
+            
+            # Fetch token using the authorization response URL
+            access_token = self.oauth_handler.fetch_token(
+                authorization_response_url=authorization_response_url
             )
+            
+            # Create client with access token
+            client = tweepy.Client(bearer_token=access_token['access_token'])
+            
+            # Get user info
+            user_info = client.get_me()
+            
+            # Encrypt tokens
+            encrypted_access_token = token_encryption.encrypt(access_token['access_token'])
+            encrypted_refresh_token = None
+            if access_token.get('refresh_token'):
+                encrypted_refresh_token = token_encryption.encrypt(access_token['refresh_token'])
+            
+            # Check if account already exists
+            existing_account = db.query(SocialAccount).filter(
+                SocialAccount.user_id == user_id,
+                SocialAccount.platform == "twitter",
+                SocialAccount.platform_user_id == str(user_info.data.id)
+            ).first()
+            
+            if existing_account:
+                # Update existing account
+                existing_account.access_token = encrypted_access_token
+                existing_account.refresh_token = encrypted_refresh_token
+                existing_account.platform_username = user_info.data.username
+                existing_account.is_active = True
+                db.commit()
+                db.refresh(existing_account)
+                return existing_account
+            
+            # Create new social account
+            social_account = SocialAccount(
+                user_id=user_id,
+                platform="twitter",
+                platform_user_id=str(user_info.data.id),
+                platform_username=user_info.data.username,
+                access_token=encrypted_access_token,
+                refresh_token=encrypted_refresh_token,
+                is_active=True
+            )
+            
+            db.add(social_account)
+            db.commit()
+            db.refresh(social_account)
+            
+            return social_account
+            
         except Exception as e:
             raise ValueError(f"Error fetching access token: {e}")
-        # Create client with access token
-        client = tweepy.Client(bearer_token=access_token['access_token'])
-        
-        # Get user info
-        user_info = client.get_me()
-        
-        # Encrypt tokens
-        encrypted_access_token = token_encryption.encrypt(access_token['access_token'])
-        encrypted_refresh_token = token_encryption.encrypt(
-            access_token.get('refresh_token', '')
-        ) if access_token.get('refresh_token') else None
-        
-        # Check if account already exists
-        existing_account = db.query(SocialAccount).filter(
-            SocialAccount.user_id == user_id,
-            SocialAccount.platform == "twitter",
-            SocialAccount.platform_user_id == str(user_info.data.id)
-        ).first()
-        
-        if existing_account:
-            # Update existing account
-            existing_account.access_token = encrypted_access_token
-            existing_account.refresh_token = encrypted_refresh_token
-            existing_account.platform_username = user_info.data.username
-            existing_account.is_active = True
-            db.commit()
-            db.refresh(existing_account)
-            return existing_account
-        
-        # Create new social account
-        social_account = SocialAccount(
-            user_id=user_id,
-            platform="twitter",
-            platform_user_id=str(user_info.data.id),
-            platform_username=user_info.data.username,
-            access_token=encrypted_access_token,
-            refresh_token=encrypted_refresh_token,
-            is_active=True
-        )
-        
-        db.add(social_account)
-        db.commit()
-        db.refresh(social_account)
-        
-        return social_account
-    
+
     async def fetch_user_tweets(
         self, 
         social_account: SocialAccount, 
         db: Session,
         max_results: int = 100
     ) -> Dict[str, int]:
-        """
-        Fetch user's tweets and store in database
-        
-        Steps:
-        1. Decrypt access token
-        2. Create Twitter client
-        3. Fetch user's tweets with metrics
-        4. Store raw data and preprocess
-        5. Return counts
-        """
+        """Fetch user's tweets and store in database"""
         # Decrypt token
         access_token = token_encryption.decrypt(social_account.access_token)
         
@@ -185,14 +175,7 @@ class TwitterService:
         db: Session,
         max_results: int = 100
     ) -> int:
-        """
-        Fetch replies to a specific tweet
-        
-        Steps:
-        1. Search for tweets that are replies to the given tweet
-        2. Store replies as comments
-        3. Preprocess and return count
-        """
+        """Fetch replies to a specific tweet"""
         # Decrypt token
         access_token = token_encryption.decrypt(social_account.access_token)
         
