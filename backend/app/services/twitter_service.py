@@ -59,9 +59,12 @@ class TwitterService:
             scope=["tweet.read", "users.read", "offline.access"],
             client_secret=self.client_secret
         )
-        access_token = oauth2_user_handler.fetch_token(
-                authorization_response_url=f"{self.callback_url}?code={code}"
+        try:
+            access_token = oauth2_user_handler.fetch_token(
+                authorization_response=f"{self.callback_url}?code={code}"
             )
+        except Exception as e:
+            raise ValueError(f"Error fetching access token: {e}")
         # Create client with access token
         client = tweepy.Client(bearer_token=access_token['access_token'])
         
