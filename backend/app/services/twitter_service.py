@@ -61,7 +61,11 @@ class TwitterService:
         )
         try:
             access_token = oauth2_user_handler.fetch_token(
-                authorization_response=f"{self.callback_url}?code={code}"
+                authorization_response=f"{self.callback_url}?code={code}",
+                code_verifier="challenge",  # In production, use the actual code verifier used in get_oauth_url
+                client_secret=self.client_secret,
+                grant_type="authorization_code",
+                redirect_uri=self.callback_url
             )
         except Exception as e:
             raise ValueError(f"Error fetching access token: {e}")
