@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.db.session import engine, Base
@@ -43,6 +44,7 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
 
 
 if __name__ == "__main__":
