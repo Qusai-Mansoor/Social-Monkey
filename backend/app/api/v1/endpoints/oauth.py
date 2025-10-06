@@ -71,7 +71,7 @@ async def twitter_callback(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to connect Twitter account: {str(e)}"
+            detail=f"Failed to connect Twitter account: {str(e)}" 
         )
 
 

@@ -16,7 +16,7 @@ class TwitterService:
         self.client_secret = settings.TWITTER_CLIENT_SECRET
         self.callback_url = settings.TWITTER_CALLBACK_URL
         self.bearer_token = settings.TWITTER_BEARER_TOKEN
-    
+        self.auth_url = ""
     def get_oauth_url(self, state: str = None) -> str:
         """
         Generate Twitter OAuth 2.0 authorization URL
@@ -34,9 +34,9 @@ class TwitterService:
             scope=["tweet.read", "users.read", "offline.access"],
             client_secret=self.client_secret
         )
-        
-        return oauth2_user_handler.get_authorization_url()
-    
+        self.auth_url = oauth2_user_handler.get_authorization_url()
+        return self.auth_url
+
     async def handle_callback(
         self, 
         code: str, 
@@ -59,9 +59,9 @@ class TwitterService:
             scope=["tweet.read", "users.read", "offline.access"],
             client_secret=self.client_secret
         )
-        
-        access_token = oauth2_user_handler.fetch_token(code)
-        
+        access_token = oauth2_user_handler.fetch_token(
+                authorization_response_url=f"{self.callback_url}?code={code}"
+            )
         # Create client with access token
         client = tweepy.Client(bearer_token=access_token['access_token'])
         
