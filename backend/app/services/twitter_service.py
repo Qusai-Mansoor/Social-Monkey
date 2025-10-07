@@ -90,7 +90,7 @@ class TwitterService:
 
 
             oauth_handler = self.get_oauth_handler()
-            oauth_handler._client.code_verifier = oauth_state.code_verifier
+            #oauth_handler._client.code_verifier = oauth_state.code_verifier
             # if not oauth_handler._client.code_verifier:
             #     raise ValueError("Missing code verifier in session")
             print(f"Code Verifier: {oauth_handler._client.code_verifier}")
