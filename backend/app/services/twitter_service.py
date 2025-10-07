@@ -58,7 +58,7 @@ class TwitterService:
             
             # Fetch token using the authorization response URL
             access_token = self.oauth_handler.fetch_token(
-                authorization_response_url=authorization_response_url
+                authorization_response=authorization_response_url
             )
             
             # Create client with access token
