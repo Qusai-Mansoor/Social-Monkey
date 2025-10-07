@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.db.session import engine, Base
+from starlette.middleware.sessions import SessionMiddleware
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -24,6 +25,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add session middleware for OAuth state management
+app.add_middleware(SessionMiddleware, secret_key="1232324343434")
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)

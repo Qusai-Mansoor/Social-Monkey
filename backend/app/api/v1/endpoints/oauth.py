@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.db.session import get_db
@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 @router.get("/twitter/authorize")
-async def twitter_authorize():
+async def twitter_authorize(request: Request):
     """
     Initiate Twitter OAuth flow
     
@@ -18,7 +18,7 @@ async def twitter_authorize():
     User should be redirected to this URL.
     """
     try:
-        auth_url = twitter_service.get_oauth_url()
+        auth_url = twitter_service.get_oauth_url(request)
         return {"authorization_url": auth_url}
     except Exception as e:
         raise HTTPException(
@@ -29,6 +29,7 @@ async def twitter_authorize():
 
 @router.get("/twitter/callback")
 async def twitter_callback(
+    request: Request,
     code: str = Query(..., description="Authorization code from Twitter"),
     state: str = Query(None, description="State parameter for CSRF protection"),
     db: Session = Depends(get_db)
@@ -54,6 +55,7 @@ async def twitter_callback(
         social_account = await twitter_service.handle_callback(
             code=code,
             user_id=user_id,
+            request=request,
             db=db
         )
         

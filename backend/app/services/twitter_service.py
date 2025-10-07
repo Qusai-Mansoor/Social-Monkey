@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.models.models import SocialAccount, Post, Comment
 from app.utils.encryption import token_encryption
 from app.utils.preprocessing import text_preprocessor
+from fastapi import Request
 
 
 class TwitterService:
@@ -21,8 +22,19 @@ class TwitterService:
         self.callback_url = settings.TWITTER_CALLBACK_URL
         self.bearer_token = settings.TWITTER_BEARER_TOKEN
         self.oauth_handler = None  # Store the handler to maintain state
+    
+    def get_oauth_handler(self, state: str = None) -> tweepy.OAuth2UserHandler:
+        """Create and return an OAuth2UserHandler instance"""
+        return tweepy.OAuth2UserHandler(
+            client_id=self.client_id,
+            redirect_uri=self.callback_url,
+            scope=["tweet.read", "users.read", "offline.access"],
+            state=state,
+            client_secret=self.client_secret
+        )
 
-    def get_oauth_url(self, state: str = None) -> str:
+
+    def get_oauth_url(self, request: Request, state: str = None) -> str:
         """Generate Twitter OAuth 2.0 authorization URL"""
         # Create and store the OAuth handler to maintain state
         self.oauth_handler = tweepy.OAuth2UserHandler(
@@ -31,36 +43,41 @@ class TwitterService:
             scope=["tweet.read", "users.read", "offline.access"],
             client_secret=self.client_secret
         )
-        
+
+        request.session['code_verifier'] = self.oauth_handler._client.code_verifier
+
+
         return self.oauth_handler.get_authorization_url()
 
     async def handle_callback(
         self, 
         code: str, 
         user_id: int, 
+        request: Request,
         db: Session
     ) -> SocialAccount:
         """Handle OAuth callback and exchange code for tokens"""
         
         try:
-            # Use the same OAuth handler that generated the authorization URL
-            if not self.oauth_handler:
-                # If for some reason the handler is None, create a new one
-                self.oauth_handler = tweepy.OAuth2UserHandler(
-                    client_id=self.client_id,
-                    redirect_uri=self.callback_url,
-                    scope=["tweet.read", "users.read", "offline.access"],
-                    client_secret=self.client_secret
-                )
-            
+            oauth_handler = self.get_oauth_handler()
+            code_verifier = request.session.get('code_verifier')
+            if not code_verifier:
+                raise ValueError("Missing code verifier in session")
+
+            oauth_handler._client.code_verifier = code_verifier
             # Simple approach: just pass the full callback URL with the code
             authorization_response_url = f"{self.callback_url}?code={code}"
             
             # Fetch token using the authorization response URL
-            access_token = self.oauth_handler.fetch_token(
+            access_token = oauth_handler.fetch_token(
                 authorization_response=authorization_response_url
             )
             
+            if not access_token or 'access_token' not in access_token:
+                raise ValueError("Failed to obtain access token")
+            else:
+                print("Access token obtained successfully")
+
             # Create client with access token
             client = tweepy.Client(bearer_token=access_token['access_token'])
             
