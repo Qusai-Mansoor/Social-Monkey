@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 @router.get("/twitter/authorize")
-async def twitter_authorize(request: Request):
+async def twitter_authorize(request: Request, db: Session = Depends(get_db)):
     """
     Initiate Twitter OAuth flow
     
@@ -18,7 +18,7 @@ async def twitter_authorize(request: Request):
     User should be redirected to this URL.
     """
     try:
-        auth_url = twitter_service.get_oauth_url(request)
+        auth_url = twitter_service.get_oauth_url(db, request)
         return {"authorization_url": auth_url}
     except Exception as e:
         raise HTTPException(

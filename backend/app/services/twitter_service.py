@@ -1,5 +1,4 @@
 import os
-from app import db
 import tweepy
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -48,7 +47,7 @@ class TwitterService:
         )
 
 
-    def get_oauth_url(self, request: Request, state: str = None) -> str:
+    def get_oauth_url(self, db: Session, request: Request, state: str = None) -> str:
         """Generate Twitter OAuth 2.0 authorization URL"""
          # Create OAuth handler
         oauth_handler = self.get_oauth_handler()
@@ -62,7 +61,8 @@ class TwitterService:
         # Store code verifier in database with state as key
         oauth_state = OAuthState(
             state=state,
-            code_verifier=oauth_handler._client.code_verifier
+            code_verifier=oauth_handler._client.code_verifier,
+            user_id=1
         )
         
         db.add(oauth_state)
