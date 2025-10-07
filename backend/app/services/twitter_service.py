@@ -29,7 +29,6 @@ class TwitterService:
             client_id=self.client_id,
             redirect_uri=self.callback_url,
             scope=["tweet.read", "users.read", "offline.access"],
-            state=state,
             client_secret=self.client_secret
         )
 
