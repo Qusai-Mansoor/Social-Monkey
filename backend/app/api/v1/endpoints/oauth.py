@@ -54,6 +54,7 @@ async def twitter_callback(
     try:
         social_account = await twitter_service.handle_callback(
             code=code,
+            state=state,
             user_id=user_id,
             request=request,
             db=db

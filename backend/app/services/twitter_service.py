@@ -1,4 +1,5 @@
 import os
+from backend.app import db
 import tweepy
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -8,6 +9,20 @@ from app.models.models import SocialAccount, Post, Comment
 from app.utils.encryption import token_encryption
 from app.utils.preprocessing import text_preprocessor
 from fastapi import Request
+import secrets
+from sqlalchemy import Column, String, DateTime
+from app.db.session import Base
+
+
+class OAuthState(Base):
+    """Temporary storage for OAuth state"""
+    __tablename__ = "oauth_states"
+    
+    state = Column(String, primary_key=True)
+    code_verifier = Column(String, nullable=False)
+    user_id = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 
 class TwitterService:
@@ -35,22 +50,32 @@ class TwitterService:
 
     def get_oauth_url(self, request: Request, state: str = None) -> str:
         """Generate Twitter OAuth 2.0 authorization URL"""
-        # Create and store the OAuth handler to maintain state
-        self.oauth_handler = tweepy.OAuth2UserHandler(
-            client_id=self.client_id,
-            redirect_uri=self.callback_url,
-            scope=["tweet.read", "users.read", "offline.access"],
-            client_secret=self.client_secret
+         # Create OAuth handler
+        oauth_handler = self.get_oauth_handler()
+        
+        # Generate authorization URL
+        auth_url = oauth_handler.get_authorization_url()
+        
+        # Generate a unique state for this request
+        state = secrets.token_urlsafe(32)
+        
+        # Store code verifier in database with state as key
+        oauth_state = OAuthState(
+            state=state,
+            code_verifier=oauth_handler._client.code_verifier
         )
+        
+        db.add(oauth_state)
+        db.commit()
+        request.session['code_verifier'] = oauth_handler._client.code_verifier
 
-        request.session['code_verifier'] = self.oauth_handler._client.code_verifier
 
-
-        return self.oauth_handler.get_authorization_url()
+        return auth_url
 
     async def handle_callback(
         self, 
         code: str, 
+        state: Optional[str],
         user_id: int, 
         request: Request,
         db: Session
@@ -58,14 +83,21 @@ class TwitterService:
         """Handle OAuth callback and exchange code for tokens"""
         
         try:
+             # Retrieve code verifier from database using state
+            oauth_state = db.query(OAuthState).filter(OAuthState.state == state).first()
+            
+            if not oauth_state:
+                raise ValueError("Invalid or expired OAuth state")
+            
+
+
             oauth_handler = self.get_oauth_handler()
-            code_verifier = request.session.get('code_verifier')
-            if not code_verifier:
+            oauth_handler._client.code_verifier = oauth_state.code_verifier
+            if not oauth_handler._client.code_verifier:
                 raise ValueError("Missing code verifier in session")
 
-            oauth_handler._client.code_verifier = code_verifier
-            # Simple approach: just pass the full callback URL with the code
-            authorization_response_url = f"{self.callback_url}?code={code}"
+           # Simple approach: just pass the full callback URL with the code
+            authorization_response_url = f"{self.callback_url}?code={code}&state={state}"
             
             # Fetch token using the authorization response URL
             access_token = oauth_handler.fetch_token(
