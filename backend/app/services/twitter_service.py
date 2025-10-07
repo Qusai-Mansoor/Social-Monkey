@@ -86,16 +86,14 @@ class TwitterService:
              # Retrieve code verifier from database using state
             oauth_state = db.query(OAuthState).filter(OAuthState.state == state).first()
             
-            if not oauth_state:
-                raise ValueError("Invalid or expired OAuth state")
             
 
 
             oauth_handler = self.get_oauth_handler()
             oauth_handler._client.code_verifier = oauth_state.code_verifier
-            if not oauth_handler._client.code_verifier:
-                raise ValueError("Missing code verifier in session")
-
+            # if not oauth_handler._client.code_verifier:
+            #     raise ValueError("Missing code verifier in session")
+            print(f"Code Verifier: {oauth_handler._client.code_verifier}")
            # Simple approach: just pass the full callback URL with the code
             authorization_response_url = f"{self.callback_url}?code={code}&state={state}"
             
