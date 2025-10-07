@@ -1,5 +1,5 @@
 import os
-from backend.app import db
+from app import db
 import tweepy
 from typing import List, Dict, Any, Optional
 from datetime import datetime
