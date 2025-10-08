@@ -55,8 +55,6 @@ class TwitterService:
         # Generate authorization URL
         auth_url = oauth_handler.get_authorization_url()
         
-        # Generate a unique state for this request
-        state = secrets.token_urlsafe(32)
         
         # Store code verifier in database with state as key
         oauth_state = OAuthState(
