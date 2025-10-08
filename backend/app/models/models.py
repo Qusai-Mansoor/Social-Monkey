@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -85,3 +86,12 @@ class Comment(Base):
     
     # Relationships
     post = relationship("Post", back_populates="comments")
+
+
+class OAuthState(Base):
+    """Temporary storage for OAuth state"""
+    __tablename__ = "oauth_states"
+    
+    state = Column(String, primary_key=True)
+    code_verifier = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

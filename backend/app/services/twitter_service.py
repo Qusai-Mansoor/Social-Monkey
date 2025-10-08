@@ -1,5 +1,6 @@
 import os
 import tweepy
+import requests
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -11,16 +12,10 @@ from fastapi import Request
 import secrets
 from sqlalchemy import Column, String, DateTime
 from app.db.session import Base
+from app.models.models import OAuthState
 
 
-class OAuthState(Base):
-    """Temporary storage for OAuth state"""
-    __tablename__ = "oauth_states"
-    
-    state = Column(String, primary_key=True)
-    code_verifier = Column(String, nullable=False)
-    user_id = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 
 
@@ -47,28 +42,18 @@ class TwitterService:
         )
 
 
-    def get_oauth_url(self, db: Session, request: Request, state: str = None) -> str:
+    def get_oauth_url(self, db: Session, request: Request) -> str:
         """Generate Twitter OAuth 2.0 authorization URL"""
          # Create OAuth handler
         oauth_handler = self.get_oauth_handler()
         
         # Generate authorization URL
         auth_url = oauth_handler.get_authorization_url()
-        
-        
-        # Store code verifier in database with state as key
-        oauth_state = OAuthState(
-            state=state,
-            code_verifier=oauth_handler._client.code_verifier,
-            user_id=1
-        )
-        
-        db.add(oauth_state)
-        db.commit()
-        request.session['code_verifier'] = oauth_handler._client.code_verifier
 
 
         return auth_url
+    
+       
 
     async def handle_callback(
         self, 
@@ -83,24 +68,48 @@ class TwitterService:
         try:
              # Retrieve code verifier from database using state
             oauth_state = db.query(OAuthState).filter(OAuthState.state == state).first()
-            
+            if not oauth_state:
+                raise ValueError("Missing OAuth state")
             
 
 
-            oauth_handler = self.get_oauth_handler()
-            #oauth_handler._client.code_verifier = oauth_state.code_verifier
-            # if not oauth_handler._client.code_verifier:
-            #     raise ValueError("Missing code verifier in session")
-            print(f"Code Verifier: {oauth_handler._client.code_verifier}")
-           # Simple approach: just pass the full callback URL with the code
-            authorization_response_url = f"{self.callback_url}?code={code}&state={state}"
+
+            #Preparing data to send to twitter to get access token
+            headers = {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization":f"Bearer {self.bearer_token}"
+            }
+
+            data = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": self.callback_url,
+                "code_verifier": oauth_state.code_verifier
+            }
+
+            response = requests.post("https://api.twitter.com/oauth2/token", headers=headers, data=data)
+            access_token = response.json()
+
+
+
+
+
+            # oauth_handler = self.get_oauth_handler()
+            
+            # print(f"Code Verifier: {oauth_handler._client.code_verifier}")
+           
+            # authorization_response_url = f"{self.callback_url}?code={code}&state={state}"
             
             # Fetch token using the authorization response URL
-            access_token = oauth_handler.fetch_token(
-                authorization_response=authorization_response_url
-            )
+            # access_token = oauth_handler.fetch_token(
+            #     authorization_response=authorization_response_url
+            # )
             
-            if not access_token or 'access_token' not in access_token:
+
+
+
+            
+            if not access_token:
                 raise ValueError("Failed to obtain access token")
             else:
                 print("Access token obtained successfully")
