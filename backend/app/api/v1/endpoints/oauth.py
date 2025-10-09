@@ -22,16 +22,7 @@ async def twitter_authorize(request: Request, db: Session = Depends(get_db)):
     """
     try:
         auth_url = twitter_service.get_oauth_url(db, request)
-        parsed_url = urlparse(auth_url)
-        params = parse_qs(parsed_url.query)
-        
-        oauth_state = OAuthState(
-            state=params.get("state", [None])[0],
-            code_verifier=params.get("code_challenge", [None])[0]
-        )
-        db.add(oauth_state)
-        db.commit()
-
+       
 
         return {"authorization_url": auth_url}
     except Exception as e:

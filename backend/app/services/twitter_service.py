@@ -1,5 +1,7 @@
 import os
 import tweepy
+import hashlib
+import base64
 import requests
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -31,29 +33,44 @@ class TwitterService:
         self.callback_url = settings.TWITTER_CALLBACK_URL
         self.bearer_token = settings.TWITTER_BEARER_TOKEN
         self.oauth_handler = None  # Store the handler to maintain state
-    
-    def get_oauth_handler(self, state: str = None) -> tweepy.OAuth2UserHandler:
-        """Create and return an OAuth2UserHandler instance"""
-        return tweepy.OAuth2UserHandler(
-            client_id=self.client_id,
-            redirect_uri=self.callback_url,
-            scope=["tweet.read", "users.read", "offline.access"],
-            client_secret=self.client_secret
-        )
+    def _generate_code_verifier(self) -> str:
+        """Generate a code verifier for PKCE"""
+        return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
 
+    def _generate_code_challenge(self, code_verifier: str) -> str:
+        """Generate a code challenge from code verifier"""
+        digest = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+        return base64.urlsafe_b64encode(digest).decode('utf-8').rstrip('=')
 
     def get_oauth_url(self, db: Session, request: Request) -> str:
         """Generate Twitter OAuth 2.0 authorization URL"""
-         # Create OAuth handler
-        oauth_handler = self.get_oauth_handler()
         
-        # Generate authorization URL
-        auth_url = oauth_handler.get_authorization_url()
-
-
+        # Generate PKCE parameters
+        code_verifier = self._generate_code_verifier()
+        code_challenge = self._generate_code_challenge(code_verifier)
+        state = secrets.token_urlsafe(32)
+        
+        # Store the code verifier and state in database
+        oauth_state = OAuthState(
+            state=state,
+            code_verifier=code_verifier  # Store the actual code_verifier, not code_challenge
+        )
+        db.add(oauth_state)
+        db.commit()
+        
+        # Build authorization URL manually
+        auth_url = (
+            f"https://twitter.com/i/oauth2/authorize"
+            f"?response_type=code"
+            f"&client_id={self.client_id}"
+            f"&redirect_uri={self.callback_url}"
+            f"&scope=tweet.read users.read offline.access"
+            f"&state={state}"
+            f"&code_challenge={code_challenge}"
+            f"&code_challenge_method=S256"
+        )
+        
         return auth_url
-    
-       
 
     async def handle_callback(
         self, 
@@ -66,60 +83,54 @@ class TwitterService:
         """Handle OAuth callback and exchange code for tokens"""
         
         try:
-             # Retrieve code verifier from database using state
+            # Retrieve code verifier from database using state
             oauth_state = db.query(OAuthState).filter(OAuthState.state == state).first()
             if not oauth_state:
                 raise ValueError("Missing OAuth state")
             
+            import base64
+        
+            # Create Basic Auth header
+            credentials = f"{self.client_id}:{self.client_secret}"
+            encoded_credentials = base64.b64encode(credentials.encode()).decode()
+                
+            print(f"Code: {code}, State: {state}, Code Verifier from DB: {oauth_state.code_verifier}")
 
-
-
-            #Preparing data to send to twitter to get access token
+            # Preparing data to send to twitter to get access token
             headers = {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Authorization":f"Bearer {self.bearer_token}"
+                "Authorization": f"Basic {encoded_credentials}"
             }
-
             data = {
                 "grant_type": "authorization_code",
                 "code": code,
                 "redirect_uri": self.callback_url,
-                "code_verifier": oauth_state.code_verifier
+                "code_verifier": oauth_state.code_verifier  # This is now the correct code_verifier
             }
 
-            response = requests.post("https://api.twitter.com/oauth2/token", headers=headers, data=data)
+            response = requests.post("https://api.twitter.com/2/oauth2/token", headers=headers, data=data)
+            
+            if response.status_code != 200:
+                print(f"Token exchange failed: {response.status_code} - {response.text}")
+                raise ValueError(f"Token exchange failed: {response.text}")
+            
             access_token = response.json()
-
-
-
-
-
-            # oauth_handler = self.get_oauth_handler()
             
-            # print(f"Code Verifier: {oauth_handler._client.code_verifier}")
-           
-            # authorization_response_url = f"{self.callback_url}?code={code}&state={state}"
+            # Clean up the OAuth state after successful token exchange
+            db.delete(oauth_state)
+            db.commit()
             
-            # Fetch token using the authorization response URL
-            # access_token = oauth_handler.fetch_token(
-            #     authorization_response=authorization_response_url
-            # )
-            
-
-
-
-            
-            if not access_token:
+            if not access_token or 'access_token' not in access_token:
                 raise ValueError("Failed to obtain access token")
             else:
-                print("Access token obtained successfully")
+                print("Access token obtained successfully, access token:", access_token)
 
             # Create client with access token
-            client = tweepy.Client(bearer_token=access_token['access_token'])
-            
+            client = tweepy.Client(bearer_token=access_token['access_token'], consumer_key=self.client_id, consumer_secret=self.client_secret)
+            print("Tweepy client created successfully")
             # Get user info
-            user_info = client.get_me()
-            
+            user_info = client.get_me(user_auth=False)
+            print("User info fetched:", user_info)
             # Encrypt tokens
             encrypted_access_token = token_encryption.encrypt(access_token['access_token'])
             encrypted_refresh_token = None
@@ -163,6 +174,16 @@ class TwitterService:
         except Exception as e:
             raise ValueError(f"Error fetching access token: {e}")
 
+
+
+
+
+
+
+
+
+
+
     async def fetch_user_tweets(
         self, 
         social_account: SocialAccount, 
@@ -174,7 +195,7 @@ class TwitterService:
         access_token = token_encryption.decrypt(social_account.access_token)
         
         # Create client
-        client = tweepy.Client(bearer_token=access_token)
+        client = tweepy.Client(access_token=access_token)
         
         # Fetch tweets
         tweets = client.get_users_tweets(
@@ -233,7 +254,7 @@ class TwitterService:
         access_token = token_encryption.decrypt(social_account.access_token)
         
         # Create client
-        client = tweepy.Client(bearer_token=access_token)
+        client = tweepy.Client(access_token=access_token)
         
         # Search for replies
         query = f"conversation_id:{post.platform_post_id}"
