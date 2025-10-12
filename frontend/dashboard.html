@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Monkey - Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">🐵 Social Monkey</div>
+            <div class="nav-menu">
+                <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3>Connected Accounts</h3>
+                <div id="accountsList">
+                    <p class="no-data">No accounts connected</p>
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Connect New Account</h3>
+                <button id="connectTwitterBtn" class="btn btn-social twitter">
+                    Connect Twitter
+                </button>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Statistics</h3>
+                <div id="statsContainer">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Posts:</span>
+                        <span id="totalPosts" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Processed:</span>
+                        <span id="processedPosts" class="stat-value">0</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        
+        <main class="main-content">
+            <div class="content-header">
+                <h2>Your Social Media Posts</h2>
+                <button id="refreshBtn" class="btn btn-primary">Refresh Data</button>
+            </div>
+            
+            <div id="postsContainer" class="posts-grid">
+                <p class="no-data">Connect a social media account to see your posts</p>
+            </div>
+            
+            <div id="loadingSpinner" class="loading-spinner" style="display: none;">
+                <div class="spinner"></div>
+                <p>Loading...</p>
+            </div>
+        </main>
+    </div>
+    
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>

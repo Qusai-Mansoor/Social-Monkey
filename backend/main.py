@@ -17,17 +17,17 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# Configure CORS
+# Configure CORS - Updated to include file:// protocol for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.cors_origins + ["http://127.0.0.1:5500/frontend", "http://localhost:5500/frontend", "null"],  # Added Live Server ports and null origin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Add session middleware for OAuth state management
-app.add_middleware(SessionMiddleware, secret_key="1232324343434")
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)  # Use settings.SECRET_KEY instead of hardcoded value
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
