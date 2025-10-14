@@ -32,6 +32,19 @@ connectTwitterBtn.addEventListener('click', async () => {
 // Refresh Data Handler
 refreshBtn.addEventListener('click', loadDashboardData);
 
+// Check for OAuth success message
+function checkOAuthSuccess() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const connected = urlParams.get('connected');
+    const username = urlParams.get('username');
+    
+    if (connected === 'twitter' && username) {
+        alert(`Twitter account @${username} connected successfully!`);
+        // Clean the URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
 // Load dashboard data
 async function loadDashboardData() {
     try {
@@ -143,7 +156,7 @@ async function ingestAccountData(accountId) {
     
     try {
         loadingSpinner.style.display = 'flex';
-        const result = await api.ingestData(accountId, 200); // Increased from 50 to 200 posts
+        const result = await api.ingestData(accountId, 50); 
         alert(result.message);
         loadDashboardData();
     } catch (error) {
@@ -154,4 +167,5 @@ async function ingestAccountData(accountId) {
 }
 
 // Initial load
+checkOAuthSuccess();
 loadDashboardData();

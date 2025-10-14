@@ -64,21 +64,30 @@ async def ingest_data(
                 max_results=max_posts
             )
             
+            # Check if there was an error
+            if "error" in result:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS if "Rate limit" in result["error"] else status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=result["error"]
+                )
+            
             posts_fetched = result["posts_created"]
             
-            # Fetch replies for each post
-            posts = db.query(Post).filter(
-                Post.social_account_id == account_id
-            ).all()
-            
+            # Only fetch replies if we successfully got posts
             total_comments = 0
-            for post in posts:
-                comments_count = await twitter_service.fetch_tweet_replies(
-                    post=post,
-                    social_account=social_account,
-                    db=db
-                )
-                total_comments += comments_count
+            if posts_fetched > 0:
+                # Fetch replies for each post (limit to recent posts to avoid rate limits)
+                posts = db.query(Post).filter(
+                    Post.social_account_id == account_id
+                ).order_by(Post.created_at_platform.desc()).limit(5).all()  # Limit to 5 most recent posts
+                
+                for post in posts:
+                    comments_count = await twitter_service.fetch_tweet_replies(
+                        post=post,
+                        social_account=social_account,
+                        db=db
+                    )
+                    total_comments += comments_count
             
             return IngestionStatus(
                 status="success",

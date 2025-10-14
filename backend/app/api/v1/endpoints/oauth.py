@@ -25,9 +25,9 @@ async def twitter_authorize(
     User should be redirected to this URL.
     """
     try:
-        auth_url = twitter_service.get_oauth_url(db, request)
+        # Pass user_id to the OAuth service so it can be embedded in state
+        auth_url = twitter_service.get_oauth_url(db, request, user_id)
        
-
         return {"authorization_url": auth_url}
     except Exception as e:
         raise HTTPException(
@@ -41,8 +41,7 @@ async def twitter_callback(
     request: Request,
     code: str = Query(..., description="Authorization code from Twitter"),
     state: str = Query(None, description="State parameter for CSRF protection"),
-    db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    db: Session = Depends(get_db)
 ):
     """
     Handle Twitter OAuth callback
@@ -57,9 +56,19 @@ async def twitter_callback(
     4. Store encrypted tokens in database
     5. Redirect to frontend with success message
     """
-    # user_id is now automatically extracted from JWT token
-    
+    # Extract user_id from OAuth state since Twitter callback doesn't include JWT
     try:
+        # Get OAuth state from database to retrieve user_id
+        oauth_state = db.query(OAuthState).filter(OAuthState.state == state).first()
+        if not oauth_state:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid OAuth state"
+            )
+        
+        # Extract user_id from the OAuth state
+        user_id = oauth_state.user_id
+        
         social_account = await twitter_service.handle_callback(
             code=code,
             state=state,
@@ -68,16 +77,11 @@ async def twitter_callback(
             db=db
         )
         
-        # Redirect to frontend with success
-        # In production, redirect to your frontend URL with success message
-        return {
-            "message": "Twitter account connected successfully",
-            "account": {
-                "platform": social_account.platform,
-                "username": social_account.platform_username,
-                "connected_at": social_account.created_at
-            }
-        }
+        # Redirect to frontend dashboard with success message
+        return RedirectResponse(
+            url="/dashboard?connected=twitter&username=" + social_account.platform_username,
+            status_code=302
+        )
     
     except Exception as e:
         raise HTTPException(
