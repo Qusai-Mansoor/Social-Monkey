@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.services.twitter_service import twitter_service
 from app.schemas.social import SocialAccountResponse, OAuthCallback
-from app.core.security import verify_token
+from app.core.security import verify_token, get_current_user_id
 from app.models.models import OAuthState
 
 
@@ -13,7 +13,11 @@ router = APIRouter()
 
 
 @router.get("/twitter/authorize")
-async def twitter_authorize(request: Request, db: Session = Depends(get_db)):
+async def twitter_authorize(
+    request: Request, 
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
     """
     Initiate Twitter OAuth flow
     
@@ -37,7 +41,8 @@ async def twitter_callback(
     request: Request,
     code: str = Query(..., description="Authorization code from Twitter"),
     state: str = Query(None, description="State parameter for CSRF protection"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
 ):
     """
     Handle Twitter OAuth callback
@@ -52,9 +57,7 @@ async def twitter_callback(
     4. Store encrypted tokens in database
     5. Redirect to frontend with success message
     """
-    # TODO: Extract user_id from session or JWT token
-    # For now, this is a placeholder - you need to implement proper auth
-    user_id = 1  # This should come from authenticated user
+    # user_id is now automatically extracted from JWT token
     
     try:
         social_account = await twitter_service.handle_callback(

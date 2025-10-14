@@ -45,8 +45,8 @@ async function loadDashboardData() {
         const stats = await api.getStats();
         displayStats(stats);
         
-        // Load posts
-        const posts = await api.getPosts();
+        // Load posts with pagination - get more posts
+        const posts = await getAllUserPosts();
         displayPosts(posts);
         
     } catch (error) {
@@ -54,6 +54,36 @@ async function loadDashboardData() {
         alert('Failed to load dashboard data');
     } finally {
         loadingSpinner.style.display = 'none';
+    }
+}
+
+// New function to get all posts with pagination
+async function getAllUserPosts(limit = 500) {
+    try {
+        // Get posts in batches
+        let allPosts = [];
+        let skip = 0;
+        const batchSize = 100;
+        
+        while (allPosts.length < limit) {
+            const batch = await fetch(`/api/v1/data/posts?skip=${skip}&limit=${batchSize}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                }
+            }).then(r => r.json());
+            
+            if (batch.length === 0) break; // No more posts
+            
+            allPosts = allPosts.concat(batch);
+            skip += batchSize;
+            
+            if (batch.length < batchSize) break; // Last batch
+        }
+        
+        return allPosts.slice(0, limit);
+    } catch (error) {
+        console.error('Error fetching all posts:', error);
+        return [];
     }
 }
 
@@ -113,7 +143,7 @@ async function ingestAccountData(accountId) {
     
     try {
         loadingSpinner.style.display = 'flex';
-        const result = await api.ingestData(accountId, 50);
+        const result = await api.ingestData(accountId, 200); // Increased from 50 to 200 posts
         alert(result.message);
         loadDashboardData();
     } catch (error) {
