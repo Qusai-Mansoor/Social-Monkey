@@ -15,12 +15,16 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
     description="Social Monkey - Emotion-aware social media helper API",
     version="0.1.0"
+
 )
 
+origins = [
+    "http://localhost:3000/frontend/landing.html",
+]
 # Configure CORS - Updated to include file:// protocol for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins + ["http://127.0.0.1:5500/frontend", "http://localhost:5500/frontend", "null"],  # Added Live Server ports and null origin
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

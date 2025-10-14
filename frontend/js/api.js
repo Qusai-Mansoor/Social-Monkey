@@ -91,4 +91,5 @@ class ApiService {
     }
 }
 
-const api = new ApiService();
+// Make API service globally available
+window.api = new ApiService();
