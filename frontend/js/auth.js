@@ -1,6 +1,6 @@
 // Check if user is already logged in
-if (localStorage.getItem('access_token') && window.location.pathname.includes('index.html')) {
-    window.location.href = 'dashboard.html';
+if (localStorage.getItem('access_token') && (window.location.pathname === '/' || window.location.pathname.includes('index.html'))) {
+    window.location.href = '/dashboard';
 }
 
 // Login Form Handler
@@ -16,7 +16,7 @@ if (loginForm) {
         try {
             errorMessage.style.display = 'none';
             await api.login(email, password);
-            window.location.href = 'dashboard.html';
+            window.location.href = '/dashboard';
         } catch (error) {
             errorMessage.textContent = error.message || 'Login failed. Please try again.';
             errorMessage.style.display = 'block';
@@ -52,7 +52,7 @@ if (registerForm) {
             successMessage.style.display = 'block';
             
             setTimeout(() => {
-                window.location.href = 'index.html';
+                window.location.href = '/';
             }, 2000);
         } catch (error) {
             errorMessage.textContent = error.message || 'Registration failed. Please try again.';

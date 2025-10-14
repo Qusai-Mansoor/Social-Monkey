@@ -1,6 +1,6 @@
 // Check if user is logged in
 if (!localStorage.getItem('access_token')) {
-    window.location.href = 'index.html';
+    window.location.href = '/';
 }
 
 // DOM Elements
@@ -16,7 +16,7 @@ const processedPostsEl = document.getElementById('processedPosts');
 // Logout Handler
 logoutBtn.addEventListener('click', () => {
     api.clearToken();
-    window.location.href = 'index.html';
+    window.location.href = '/';
 });
 
 // Connect Twitter Handler
