@@ -18,9 +18,7 @@ app = FastAPI(
 
 )
 
-origins = [
-    "http://localhost:3000/frontend/landing.html",
-]
+
 # Configure CORS - Updated to include file:// protocol for local development
 app.add_middleware(
     CORSMiddleware,
