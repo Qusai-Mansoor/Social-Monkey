@@ -5,17 +5,17 @@ from app.db.session import get_db
 from app.schemas.social import PostResponse, PostWithComments, IngestionStatus, SocialAccountResponse
 from app.models.models import SocialAccount, Post
 from app.services.twitter_service import twitter_service
+from app.core.security import get_current_user_id
 
 router = APIRouter()
 
 
 @router.get("/accounts", response_model=List[SocialAccountResponse])
 async def get_connected_accounts(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
 ):
-    """Get all connected social media accounts for the user"""
-    # TODO: Get user_id from authenticated user
-    user_id = 1
+    """Get all connected social media accounts for the authenticated user"""
     
     accounts = db.query(SocialAccount).filter(
         SocialAccount.user_id == user_id,
@@ -29,7 +29,8 @@ async def get_connected_accounts(
 async def ingest_data(
     account_id: int,
     max_posts: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
 ):
     """
     Ingest posts and comments from a connected social account
@@ -41,9 +42,10 @@ async def ingest_data(
     4. Store in database
     5. Return ingestion statistics
     """
-    # Get social account
+    # Get social account - ensure it belongs to the authenticated user
     social_account = db.query(SocialAccount).filter(
         SocialAccount.id == account_id,
+        SocialAccount.user_id == user_id,  # Security: only allow access to user's own accounts
         SocialAccount.is_active == True
     ).first()
     
@@ -62,21 +64,30 @@ async def ingest_data(
                 max_results=max_posts
             )
             
+            # Check if there was an error
+            if "error" in result:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS if "Rate limit" in result["error"] else status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=result["error"]
+                )
+            
             posts_fetched = result["posts_created"]
             
-            # Fetch replies for each post
-            posts = db.query(Post).filter(
-                Post.social_account_id == account_id
-            ).all()
-            
+            # Only fetch replies if we successfully got posts
             total_comments = 0
-            for post in posts:
-                comments_count = await twitter_service.fetch_tweet_replies(
-                    post=post,
-                    social_account=social_account,
-                    db=db
-                )
-                total_comments += comments_count
+            if posts_fetched > 0:
+                # Fetch replies for each post (limit to recent posts to avoid rate limits)
+                posts = db.query(Post).filter(
+                    Post.social_account_id == account_id
+                ).order_by(Post.created_at_platform.desc()).limit(5).all()  # Limit to 5 most recent posts
+                
+                for post in posts:
+                    comments_count = await twitter_service.fetch_tweet_replies(
+                        post=post,
+                        social_account=social_account,
+                        db=db
+                    )
+                    total_comments += comments_count
             
             return IngestionStatus(
                 status="success",
@@ -103,10 +114,14 @@ async def get_posts(
     account_id: int = None,
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
 ):
-    """Get posts with optional filtering by account"""
-    query = db.query(Post)
+    """Get posts with optional filtering by account - only for authenticated user"""
+    # Join with SocialAccount to ensure user only sees their own posts
+    query = db.query(Post).join(SocialAccount).filter(
+        SocialAccount.user_id == user_id
+    )
     
     if account_id:
         query = query.filter(Post.social_account_id == account_id)
@@ -118,10 +133,15 @@ async def get_posts(
 @router.get("/posts/{post_id}", response_model=PostWithComments)
 async def get_post_with_comments(
     post_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
 ):
-    """Get a specific post with all its comments"""
-    post = db.query(Post).filter(Post.id == post_id).first()
+    """Get a specific post with all its comments - only for authenticated user"""
+    # Join with SocialAccount to ensure user only sees their own posts
+    post = db.query(Post).join(SocialAccount).filter(
+        Post.id == post_id,
+        SocialAccount.user_id == user_id
+    ).first()
     
     if not post:
         raise HTTPException(
@@ -134,11 +154,10 @@ async def get_post_with_comments(
 
 @router.get("/stats")
 async def get_ingestion_stats(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
 ):
-    """Get overall ingestion statistics"""
-    # TODO: Get user_id from authenticated user
-    user_id = 1
+    """Get overall ingestion statistics for authenticated user"""
     
     # Get user's social accounts
     accounts = db.query(SocialAccount).filter(

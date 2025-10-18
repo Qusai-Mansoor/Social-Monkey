@@ -1,6 +1,6 @@
 // Check if user is logged in
 if (!localStorage.getItem('access_token')) {
-    window.location.href = 'index.html';
+    window.location.href = '/';
 }
 
 // DOM Elements
@@ -16,7 +16,7 @@ const processedPostsEl = document.getElementById('processedPosts');
 // Logout Handler
 logoutBtn.addEventListener('click', () => {
     api.clearToken();
-    window.location.href = 'index.html';
+    window.location.href = '/';
 });
 
 // Connect Twitter Handler
@@ -32,6 +32,19 @@ connectTwitterBtn.addEventListener('click', async () => {
 // Refresh Data Handler
 refreshBtn.addEventListener('click', loadDashboardData);
 
+// Check for OAuth success message
+function checkOAuthSuccess() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const connected = urlParams.get('connected');
+    const username = urlParams.get('username');
+    
+    if (connected === 'twitter' && username) {
+        alert(`Twitter account @${username} connected successfully!`);
+        // Clean the URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
 // Load dashboard data
 async function loadDashboardData() {
     try {
@@ -45,8 +58,8 @@ async function loadDashboardData() {
         const stats = await api.getStats();
         displayStats(stats);
         
-        // Load posts
-        const posts = await api.getPosts();
+        // Load posts with pagination - get more posts
+        const posts = await getAllUserPosts();
         displayPosts(posts);
         
     } catch (error) {
@@ -54,6 +67,36 @@ async function loadDashboardData() {
         alert('Failed to load dashboard data');
     } finally {
         loadingSpinner.style.display = 'none';
+    }
+}
+
+// New function to get all posts with pagination
+async function getAllUserPosts(limit = 500) {
+    try {
+        // Get posts in batches
+        let allPosts = [];
+        let skip = 0;
+        const batchSize = 100;
+        
+        while (allPosts.length < limit) {
+            const batch = await fetch(`/api/v1/data/posts?skip=${skip}&limit=${batchSize}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                }
+            }).then(r => r.json());
+            
+            if (batch.length === 0) break; // No more posts
+            
+            allPosts = allPosts.concat(batch);
+            skip += batchSize;
+            
+            if (batch.length < batchSize) break; // Last batch
+        }
+        
+        return allPosts.slice(0, limit);
+    } catch (error) {
+        console.error('Error fetching all posts:', error);
+        return [];
     }
 }
 
@@ -69,11 +112,17 @@ function displayAccounts(accounts) {
                 <span class="platform-badge ${account.platform}">${account.platform}</span>
                 <span>@${account.platform_username}</span>
             </div>
-            <button onclick="ingestAccountData(${account.id})" class="btn btn-primary" style="padding: 6px 12px; font-size: 14px;">
+            <button id="${account.id}Sync" class="btn btn-primary" style="padding: 6px 12px; font-size: 14px;">
                 Sync
             </button>
         </div>
     `).join('');
+
+    // Attach event listeners to sync buttons
+    accounts.forEach(account => {
+        const syncBtn = document.getElementById(`${account.id}Sync`);
+        syncBtn.addEventListener('click', () => ingestAccountData(account.id));
+    });
 }
 
 function displayStats(stats) {
@@ -113,7 +162,7 @@ async function ingestAccountData(accountId) {
     
     try {
         loadingSpinner.style.display = 'flex';
-        const result = await api.ingestData(accountId, 50);
+        const result = await api.ingestData(accountId, 50); 
         alert(result.message);
         loadDashboardData();
     } catch (error) {
@@ -124,4 +173,5 @@ async function ingestAccountData(accountId) {
 }
 
 // Initial load
+checkOAuthSuccess();
 loadDashboardData();

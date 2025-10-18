@@ -94,4 +94,5 @@ class OAuthState(Base):
     
     state = Column(String, primary_key=True)
     code_verifier = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
