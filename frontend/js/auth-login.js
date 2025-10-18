@@ -4,8 +4,6 @@
  */
 
 // Import API configuration
-import { API_BASE_URL } from './config.js';
-
 class LoginManager {
     constructor() {
         this.form = document.getElementById('loginForm');
@@ -73,7 +71,7 @@ class LoginManager {
         this.clearMessages();
         
         try {
-            const loginUrl = `${API_BASE_URL}/api/v1/auth/login`;
+            const loginUrl = `/api/v1/auth/login`;
             console.log('Sending login request to:', loginUrl);
 
             const payload = {
@@ -116,8 +114,13 @@ class LoginManager {
                 }
                 
                 // Redirect to dashboard after short delay
-                setTimeout(() => {
-                    window.location.href = './templates/dashboard.html';
+                setTimeout(async () => {
+                    const response = await fetch(`/dashboard`);
+                    if (response.ok) {
+                        console.log('Redirecting to dashboard');}
+                    else {
+                        console.error('Dashboard redirect failed:', response.status, response.statusText);
+                    }
                 }, 1500);
                 
             } else {
@@ -231,7 +234,7 @@ class LoginManager {
         this.showMessage(`Redirecting to ${provider} login...`, 'success');
         
         // Construct OAuth URL
-        const oauthUrl = `${API_BASE_URL}/api/v1/auth/oauth/${provider}`;
+        const oauthUrl = `/api/v1/auth/oauth/${provider}`;
         
         // Redirect to OAuth provider
         window.location.href = oauthUrl;
@@ -319,11 +322,11 @@ class LoginManager {
     }
     
     async checkBackendConnection() {
-        console.log('Checking backend connection to:', `${API_BASE_URL}/`);
+        console.log('Checking backend connection to:', `/health`);
         try {
-            // Try the root endpoint first
-            const response = await fetch(`${API_BASE_URL}/`);
-            
+            // Try the /health endpoint
+            const response = await fetch(`/health`);
+
             console.log('Backend response status:', response.status);
             if (response.ok) {
                 const data = await response.json();

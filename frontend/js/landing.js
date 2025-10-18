@@ -1,11 +1,8 @@
-// Bodar Technology Page JavaScript
-const BACKEND_BASE_URL = "http://localhost:8000";
-
 // Function to check backend health
 async function checkBackendHealth() {
     const statusIndicator = document.getElementById('backend-status');
     try {
-        const response = await fetch(`${BACKEND_BASE_URL}/health`);
+        const response = await fetch(`/health`);
         if (response.ok) {
             updateBackendStatus(true);
         } else {
@@ -45,7 +42,7 @@ function updateBackendStatus(isConnected) {
     }
 }
 
-// Run health check on page load and every 10 seconds
+//Run health check on page load and every 10 seconds
 // document.addEventListener('DOMContentLoaded', function() {
 //     checkBackendHealth();
 //     setInterval(checkBackendHealth, 10000);

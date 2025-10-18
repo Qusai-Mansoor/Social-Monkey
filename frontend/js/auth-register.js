@@ -4,7 +4,6 @@
  */
 
 // Import API configuration
-import { API_BASE_URL } from './config.js';
 
 class RegisterManager {
     constructor() {
@@ -81,7 +80,7 @@ class RegisterManager {
                 password: this.passwordInput.value
             };
             
-            const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+            const response = await fetch(`/api/v1/auth/register`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -358,7 +357,7 @@ class RegisterManager {
         this.showMessage(`Redirecting to ${provider} registration...`, 'success');
         
         // Construct OAuth URL
-        const oauthUrl = `${API_BASE_URL}/api/v1/auth/oauth/${provider}`;
+        const oauthUrl = `/api/v1/auth/oauth/${provider}`;
         
         // Redirect to OAuth provider
         window.location.href = oauthUrl;
@@ -406,11 +405,11 @@ class RegisterManager {
     }
     
     async checkBackendConnection() {
-        console.log('Checking backend connection to:', `${API_BASE_URL}/`);
+        console.log('Checking backend connection to:', `/health`);
         try {
-            // Try the root endpoint first
-            const response = await fetch(`${API_BASE_URL}/`);
-            
+            // Try the /health endpoint
+            const response = await fetch(`/health`);
+
             console.log('Backend response status:', response.status);
             if (response.ok) {
                 const data = await response.json();
