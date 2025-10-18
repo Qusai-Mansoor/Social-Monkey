@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -32,12 +32,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
 # Add session middleware for OAuth state management
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)  # Use settings.SECRET_KEY instead of hardcoded value
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)

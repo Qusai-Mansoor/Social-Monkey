@@ -42,7 +42,7 @@ class TwitterService:
         digest = hashlib.sha256(code_verifier.encode('utf-8')).digest()
         return base64.urlsafe_b64encode(digest).decode('utf-8').rstrip('=')
 
-    def get_oauth_url(self, db: Session, request: Request) -> str:
+    def get_oauth_url(self, db: Session, request: Request, user_id: int) -> str:
         """Generate Twitter OAuth 2.0 authorization URL"""
         
         # Generate PKCE parameters
@@ -50,10 +50,11 @@ class TwitterService:
         code_challenge = self._generate_code_challenge(code_verifier)
         state = secrets.token_urlsafe(32)
         
-        # Store the code verifier and state in database
+        # Store the code verifier, state, and user_id in database
         oauth_state = OAuthState(
             state=state,
-            code_verifier=code_verifier  # Store the actual code_verifier, not code_challenge
+            code_verifier=code_verifier,  # Store the actual code_verifier, not code_challenge
+            user_id=user_id  # Store user_id so we can retrieve it in callback
         )
         db.add(oauth_state)
         db.commit()
@@ -188,26 +189,44 @@ class TwitterService:
         self, 
         social_account: SocialAccount, 
         db: Session,
-        max_results: int = 100
+        max_results: int = 50  # Reduced default to avoid rate limits
     ) -> Dict[str, int]:
         """Fetch user's tweets and store in database"""
         # Decrypt token
         access_token = token_encryption.decrypt(social_account.access_token)
         
-        # Create client
-        client = tweepy.Client(access_token=access_token)
-        
-        # Fetch tweets
-        tweets = client.get_users_tweets(
-            id=social_account.platform_user_id,
-            max_results=max_results,
-            tweet_fields=['created_at', 'public_metrics', 'lang'],
-            exclude=['retweets', 'replies']
+        # Create client with OAuth access token (not bearer token)
+        client = tweepy.Client(
+            access_token=access_token,
+            access_token_secret=None,  # For OAuth 2.0, this is None
+            consumer_key=self.client_id,
+            consumer_secret=self.client_secret,
+            bearer_token=self.bearer_token,
+            wait_on_rate_limit=True  # Automatically handle rate limits
         )
+        print("Tweepy client created for fetching tweets")
+        
+        try:
+            # Fetch tweets with smaller batch size to avoid rate limits
+            tweets = client.get_users_tweets(
+                id=social_account.platform_user_id,
+                max_results=min(max_results, 20),  # Twitter API v2 limit is 100, but start smaller
+                tweet_fields=['created_at', 'public_metrics', 'lang'],
+                exclude=['retweets', 'replies']
+            )
+        except tweepy.TooManyRequests as e:
+            print(f"Rate limit exceeded: {e}")
+            return {"posts_created": 0, "error": "Rate limit exceeded. Please try again later."}
+        except tweepy.Unauthorized as e:
+            print(f"Unauthorized access: {e}")
+            return {"posts_created": 0, "error": "Unauthorized access. Please re-authenticate."}
+        except Exception as e:
+            print(f"Error fetching tweets: {e}")
+            return {"posts_created": 0, "error": str(e)}
         
         posts_created = 0
         
-        if tweets.data:
+        if tweets and tweets.data:
             for tweet in tweets.data:
                 # Check if post already exists
                 existing_post = db.query(Post).filter(
@@ -229,16 +248,24 @@ class TwitterService:
                     preprocessed_content=preprocessed_text,
                     language=language or tweet.lang,
                     created_at_platform=tweet.created_at,
-                    likes_count=tweet.public_metrics.get('like_count', 0),
-                    retweets_count=tweet.public_metrics.get('retweet_count', 0),
-                    replies_count=tweet.public_metrics.get('reply_count', 0),
+                    likes_count=tweet.public_metrics.get('like_count', 0) if tweet.public_metrics else 0,
+                    retweets_count=tweet.public_metrics.get('retweet_count', 0) if tweet.public_metrics else 0,
+                    replies_count=tweet.public_metrics.get('reply_count', 0) if tweet.public_metrics else 0,
                     is_preprocessed=True
                 )
                 
                 db.add(post)
                 posts_created += 1
             
-            db.commit()
+            try:
+                db.commit()
+                print(f"Successfully created {posts_created} posts")
+            except Exception as e:
+                db.rollback()
+                print(f"Error committing posts to database: {e}")
+                return {"posts_created": 0, "error": f"Database error: {str(e)}"}
+        else:
+            print("No tweets found or empty response")
         
         return {"posts_created": posts_created}
     
@@ -247,14 +274,22 @@ class TwitterService:
         post: Post,
         social_account: SocialAccount,
         db: Session,
-        max_results: int = 100
+        max_results: int = 20  # Reduced to avoid rate limits
     ) -> int:
         """Fetch replies to a specific tweet"""
         # Decrypt token
         access_token = token_encryption.decrypt(social_account.access_token)
         
-        # Create client
-        client = tweepy.Client(access_token=access_token)
+        # Create client with OAuth access token and rate limiting
+        client = tweepy.Client(
+            access_token=access_token,
+            access_token_secret=None,
+            consumer_key=self.client_id,
+            consumer_secret=self.client_secret,
+            bearer_token=self.bearer_token,
+            wait_on_rate_limit=True
+        )
+        print("Tweepy client created for fetching replies")  
         
         # Search for replies
         query = f"conversation_id:{post.platform_post_id}"
@@ -262,13 +297,23 @@ class TwitterService:
         try:
             replies = client.search_recent_tweets(
                 query=query,
-                max_results=max_results,
+                max_results=min(max_results, 20),
                 tweet_fields=['created_at', 'public_metrics', 'author_id'],
             )
-            
-            comments_created = 0
-            
-            if replies.data:
+        except tweepy.TooManyRequests as e:
+            print(f"Rate limit exceeded for replies: {e}")
+            return 0
+        except tweepy.Unauthorized as e:
+            print(f"Unauthorized access for replies: {e}")
+            return 0
+        except Exception as e:
+            print(f"Error fetching replies: {e}")
+            return 0
+        
+        comments_created = 0
+        
+        try:
+            if replies and replies.data:
                 for reply in replies.data:
                     # Skip if it's the original tweet
                     if str(reply.id) == post.platform_post_id:
@@ -298,7 +343,7 @@ class TwitterService:
                         preprocessed_content=preprocessed_text,
                         language=language,
                         created_at_platform=reply.created_at,
-                        likes_count=reply.public_metrics.get('like_count', 0),
+                        likes_count=reply.public_metrics.get('like_count', 0) if reply.public_metrics else 0,
                         is_preprocessed=True
                     )
                     
@@ -306,12 +351,16 @@ class TwitterService:
                     comments_created += 1
                 
                 db.commit()
-                
-            return comments_created
+                print(f"Successfully created {comments_created} comments")
+            else:
+                print("No replies found")
             
         except Exception as e:
-            print(f"Error fetching replies: {e}")
+            db.rollback()
+            print(f"Error processing replies: {e}")
             return 0
+        
+        return comments_created
 
 
 # Global instance
