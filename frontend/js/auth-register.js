@@ -101,7 +101,7 @@ class RegisterManager {
                 
                 // Redirect to login page after delay
                 setTimeout(() => {
-                    window.location.href = './templates/login.html';
+                    window.location.href = '/login';
                 }, 3000);
                 
             } else {

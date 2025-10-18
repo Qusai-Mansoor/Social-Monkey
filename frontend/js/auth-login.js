@@ -97,7 +97,7 @@ class LoginManager {
                 
                 // Store authentication token
                 if (data.access_token) {
-                    localStorage.setItem('accessToken', data.access_token);
+                    localStorage.setItem('access_token', data.access_token);
                     localStorage.setItem('tokenType', data.token_type || 'bearer');
                 }
                 
@@ -115,12 +115,8 @@ class LoginManager {
                 
                 // Redirect to dashboard after short delay
                 setTimeout(async () => {
-                    const response = await fetch(`/dashboard`);
-                    if (response.ok) {
-                        console.log('Redirecting to dashboard');}
-                    else {
-                        console.error('Dashboard redirect failed:', response.status, response.statusText);
-                    }
+                    console.log('Redirecting to dashboard');
+                    window.location.href = '/dashboard';
                 }, 1500);
                 
             } else {

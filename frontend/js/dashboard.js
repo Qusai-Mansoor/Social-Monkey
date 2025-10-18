@@ -112,11 +112,17 @@ function displayAccounts(accounts) {
                 <span class="platform-badge ${account.platform}">${account.platform}</span>
                 <span>@${account.platform_username}</span>
             </div>
-            <button onclick="ingestAccountData(${account.id})" class="btn btn-primary" style="padding: 6px 12px; font-size: 14px;">
+            <button id="${account.id}Sync" class="btn btn-primary" style="padding: 6px 12px; font-size: 14px;">
                 Sync
             </button>
         </div>
     `).join('');
+
+    // Attach event listeners to sync buttons
+    accounts.forEach(account => {
+        const syncBtn = document.getElementById(`${account.id}Sync`);
+        syncBtn.addEventListener('click', () => ingestAccountData(account.id));
+    });
 }
 
 function displayStats(stats) {

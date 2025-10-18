@@ -1,3 +1,4 @@
+import { API_ENDPOINTS } from './config.js';
 class ApiService {
     constructor() {
         this.token = localStorage.getItem('access_token');
