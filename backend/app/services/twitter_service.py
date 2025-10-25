@@ -202,7 +202,7 @@ class TwitterService:
             consumer_key=self.client_id,
             consumer_secret=self.client_secret,
             bearer_token=self.bearer_token,
-            wait_on_rate_limit=True  # Automatically handle rate limits
+            wait_on_rate_limit=False  # Automatically handle rate limits
         )
         print("Tweepy client created for fetching tweets")
         
@@ -214,9 +214,9 @@ class TwitterService:
                 tweet_fields=['created_at', 'public_metrics', 'lang'],
                 exclude=['retweets', 'replies']
             )
-        except tweepy.TooManyRequests as e:
-            print(f"Rate limit exceeded: {e}")
-            return {"posts_created": 0, "error": "Rate limit exceeded. Please try again later."}
+        # except tweepy.TooManyRequests as e:
+        #     print(f"Rate limit exceeded: {e}")
+        #     return {"posts_created": 0, "error": "Rate limit exceeded. Please try again later."}
         except tweepy.Unauthorized as e:
             print(f"Unauthorized access: {e}")
             return {"posts_created": 0, "error": "Unauthorized access. Please re-authenticate."}

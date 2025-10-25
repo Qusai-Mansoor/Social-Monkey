@@ -1,4 +1,5 @@
 import { API_ENDPOINTS } from './config.js';
+
 class ApiService {
     constructor() {
         this.token = localStorage.getItem('access_token');
@@ -89,6 +90,49 @@ class ApiService {
         return this.request(API_ENDPOINTS.INGEST(accountId) + `?max_posts=${maxPosts}`, {
             method: 'POST'
         });
+    }
+
+    // Analytics methods
+    async getEmotionAnalysis() {
+        return this.request(API_ENDPOINTS.EMOTION_ANALYSIS);
+    }
+
+    async getSlangAnalysis() {
+        return this.request(API_ENDPOINTS.SLANG_ANALYSIS);
+    }
+
+    async getTopPosts(limit = 5) {
+        try {
+            const response = await this.makeRequest(`/ingestion/posts?limit=${limit}`);
+            
+            // Sort posts by engagement (likes + retweets + replies)
+            if (Array.isArray(response)) {
+                return response
+                    .map(post => ({
+                        ...post,
+                        total_engagement: (post.likes_count || 0) + (post.retweets_count || 0) + (post.replies_count || 0)
+                    }))
+                    .sort((a, b) => b.total_engagement - a.total_engagement)
+                    .slice(0, limit);
+            }
+            
+            return [];
+        } catch (error) {
+            console.error('Error fetching top posts:', error);
+            return [];
+        }
+    }
+
+    async getEngagementTrends(days = 30) {
+        return this.request(`${API_ENDPOINTS.ENGAGEMENT_TRENDS}?days=${days}`);
+    }
+
+    async getPostFrequency(days = 30) {
+        return this.request(`${API_ENDPOINTS.POST_FREQUENCY}?days=${days}`);
+    }
+
+    async getAdvancedAnalytics() {
+        return this.request(API_ENDPOINTS.ADVANCED_ANALYTICS);
     }
 }
 

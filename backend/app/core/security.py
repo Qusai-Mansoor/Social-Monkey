@@ -7,6 +7,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.db.session import get_db
+from app.models.models import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -84,3 +86,59 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
             detail="Invalid user ID in token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def get_current_user(
+    db: Session = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> User:
+    """
+    Dependency to get the current authenticated user from JWT token.
+    Returns the full User object from the database.
+    
+    Usage:
+        @router.get("/protected-endpoint")
+        async def protected_endpoint(current_user: User = Depends(get_current_user)):
+            # current_user is now the authenticated User object
+            return {"user_id": current_user.id, "email": current_user.email}
+    """
+    try:
+        # Extract token from Bearer authorization header
+        token = credentials.credentials
+        
+        # Decode JWT token
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        
+        # Extract user ID from token payload
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Fetch user from database
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        return user
+        
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID in token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
