@@ -103,7 +103,7 @@ class ApiService {
 
     async getTopPosts(limit = 5) {
         try {
-            const response = await this.makeRequest(`/ingestion/posts?limit=${limit}`);
+            const response = await this.request(`/api/v1/ingestion/posts?limit=${limit}`);
             
             // Sort posts by engagement (likes + retweets + replies)
             if (Array.isArray(response)) {

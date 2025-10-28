@@ -61,9 +61,10 @@ body {
 
 .main-content {
     padding: 32px;
-    max-width: 1400px;
     width: 100%;
-    /* REMOVED conflicting styles */
+    max-width: none; /* Remove the 1400px limit */
+    box-sizing: border-box;
+    overflow-x: auto; /* Handle overflow gracefully */
 }
 
 /* ========================================
