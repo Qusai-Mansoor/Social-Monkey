@@ -44,7 +44,10 @@ class ApiService {
         }
     }
 
-    // Auth methods
+    // ============================================
+    // AUTH METHODS
+    // ============================================
+
     async register(email, username, password) {
         return this.request(API_ENDPOINTS.REGISTER, {
             method: 'POST',
@@ -65,12 +68,36 @@ class ApiService {
         return data;
     }
 
-    // OAuth methods
+    // ============================================
+    // OVERVIEW DATA METHODS
+    // ============================================
+
+    /**
+     * Get top performing posts from ingestion endpoint (REAL DATA FROM DATABASE)
+     */
+    async getTopPosts(limit = 5) {
+        try {
+            // Call ingestion endpoint which fetches real posts from database
+            const posts = await this.request(`/api/v1/ingestion/posts?limit=${limit}`);
+            return Array.isArray(posts) ? posts : [];
+        } catch (error) {
+            console.error('Error fetching top posts:', error);
+            return [];
+        }
+    }
+
+    // ============================================
+    // OAUTH METHODS
+    // ============================================
+
     async getTwitterAuthUrl() {
         return this.request(API_ENDPOINTS.TWITTER_AUTH);
     }
 
-    // Data methods
+    // ============================================
+    // DATA METHODS
+    // ============================================
+
     async getAccounts() {
         return this.request(API_ENDPOINTS.ACCOUNTS);
     }
@@ -92,34 +119,25 @@ class ApiService {
         });
     }
 
-    // Analytics methods
+    // ============================================
+    // ANALYTICS METHODS
+    // ============================================
+
     async getEmotionAnalysis() {
-        return this.request(API_ENDPOINTS.EMOTION_ANALYSIS);
+        try {
+            return await this.request(API_ENDPOINTS.EMOTION_ANALYSIS);
+        } catch (error) {
+            console.error('Error fetching emotion analysis:', error);
+            return { emotion_distribution: { joy: 0, admiration: 0, neutral: 0, sarcasm: 0, anger: 0 } };
+        }
     }
 
     async getSlangAnalysis() {
-        return this.request(API_ENDPOINTS.SLANG_ANALYSIS);
-    }
-
-    async getTopPosts(limit = 5) {
         try {
-            const response = await this.makeRequest(`/ingestion/posts?limit=${limit}`);
-            
-            // Sort posts by engagement (likes + retweets + replies)
-            if (Array.isArray(response)) {
-                return response
-                    .map(post => ({
-                        ...post,
-                        total_engagement: (post.likes_count || 0) + (post.retweets_count || 0) + (post.replies_count || 0)
-                    }))
-                    .sort((a, b) => b.total_engagement - a.total_engagement)
-                    .slice(0, limit);
-            }
-            
-            return [];
+            return await this.request(API_ENDPOINTS.SLANG_ANALYSIS);
         } catch (error) {
-            console.error('Error fetching top posts:', error);
-            return [];
+            console.error('Error fetching slang analysis:', error);
+            return { top_terms: [] };
         }
     }
 
@@ -138,3 +156,5 @@ class ApiService {
 
 // Make API service globally available
 window.api = new ApiService();
+
+export default ApiService;

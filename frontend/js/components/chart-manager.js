@@ -379,9 +379,120 @@ class ChartManager {
             this.destroyChart(canvasId);
         });
     }
+
+    /**
+     * Create pie chart (generic method)
+     */
+    createPieChart(canvasId, data, options = {}) {
+        // Destroy existing chart
+        if (this.charts[canvasId]) {
+            this.charts[canvasId].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) {
+            console.error(`Canvas element '${canvasId}' not found`);
+            return null;
+        }
+
+        const defaultOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: 'rgba(255, 255, 255, 0.8)',
+                        padding: 15,
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#111533',
+                    titleColor: '#FFFFFF',
+                    bodyColor: 'rgba(255, 255, 255, 0.8)',
+                    borderColor: 'rgba(124, 58, 237, 0.5)',
+                    borderWidth: 1,
+                    padding: 12
+                }
+            }
+        };
+
+        this.charts[canvasId] = new Chart(ctx, {
+            type: 'pie',
+            data: data,
+            options: { ...defaultOptions, ...options }
+        });
+
+        return this.charts[canvasId];
+    }
+
+    /**
+     * Create bar chart (generic method)
+     */
+    createBarChart(canvasId, data, options = {}) {
+        // Destroy existing chart
+        if (this.charts[canvasId]) {
+            this.charts[canvasId].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) {
+            console.error(`Canvas element '${canvasId}' not found`);
+            return null;
+        }
+
+        const defaultOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: '#111533',
+                    titleColor: '#FFFFFF',
+                    bodyColor: 'rgba(255, 255, 255, 0.8)',
+                    borderColor: 'rgba(124, 58, 237, 0.5)',
+                    borderWidth: 1,
+                    padding: 12
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.8)'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.8)'
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        };
+
+        this.charts[canvasId] = new Chart(ctx, {
+            type: 'bar',
+            data: data,
+            options: { ...defaultOptions, ...options }
+        });
+
+        return this.charts[canvasId];
+    }
 }
 
 // Create global instance
 window.chartManager = new ChartManager();
 
 export default ChartManager;
+
