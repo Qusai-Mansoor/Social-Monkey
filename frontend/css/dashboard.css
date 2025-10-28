@@ -64,8 +64,7 @@ body {
     width: 100%;
     max-width: none; /* Remove the 1400px limit */
     box-sizing: border-box;
-    overflow-x: auto;
-    /* REMOVED conflicting styles */
+    overflow-x: auto; /* Handle overflow gracefully */
 }
 
 /* ========================================

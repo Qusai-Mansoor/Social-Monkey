@@ -133,8 +133,25 @@ class ApiService {
     }
 
     async getSlangAnalysis() {
+        return this.request(API_ENDPOINTS.SLANG_ANALYSIS);
+    }
+
+    async getTopPosts(limit = 5) {
         try {
-            return await this.request(API_ENDPOINTS.SLANG_ANALYSIS);
+            const response = await this.request(`/api/v1/ingestion/posts?limit=${limit}`);
+            
+            // Sort posts by engagement (likes + retweets + replies)
+            if (Array.isArray(response)) {
+                return response
+                    .map(post => ({
+                        ...post,
+                        total_engagement: (post.likes_count || 0) + (post.retweets_count || 0) + (post.replies_count || 0)
+                    }))
+                    .sort((a, b) => b.total_engagement - a.total_engagement)
+                    .slice(0, limit);
+            }
+            
+            return [];
         } catch (error) {
             console.error('Error fetching slang analysis:', error);
             return { top_terms: [] };
