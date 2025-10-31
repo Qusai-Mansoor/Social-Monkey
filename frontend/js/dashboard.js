@@ -499,9 +499,12 @@ class DashboardApp {
                         <span class="platform-badge">${account.platform}</span>
                         <span>@${account.username || account.platform_username}</span>
                     </div>
-                    <button class="btn-secondary" onclick="window.dashboardApp.syncAccount(${account.id})">
-                        Sync Data
-                    </button>
+                    <div class="account-actions">
+                        <button class="btn-secondary" onclick="window.dashboardApp.syncPosts(${account.id})" title="Fetch new posts only">
+                            <i class="fas fa-file-alt"></i> Sync Posts
+                        </button>
+                         
+                    </div>
                 </div>
             `).join('');
         } catch (error) {
@@ -521,9 +524,15 @@ class DashboardApp {
             });
 
             const data = await response.json();
-            
             if (data.authorization_url) {
-                window.location.href = data.authorization_url;
+                const win = window.open(data.authorization_url, '_blank', 'noopener,noreferrer');
+                if (win) {
+                    win.opener = null;
+                    win.focus();
+                } else {
+                    // popup blocked — fallback to same tab
+                    //window.location.href = data.authorization_url;
+                }
             }
         } catch (error) {
             console.error('Error connecting Twitter:', error);
@@ -532,43 +541,69 @@ class DashboardApp {
     }
 
     /**
-     * Sync account data
+     * Sync account data with options
      */
-    async syncAccount(accountId) {
-    try {
-        // Change from /ingestion/ingest/ to /ingestion/ingest/
-        const response = await fetch(`/api/v1/ingestion/ingest/${accountId}`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                'Content-Type': 'application/json'
+    async syncAccount(accountId, options = { fetchPosts: true, fetchReplies: true }) {
+        try {
+            // Build query parameters
+            const params = new URLSearchParams({
+                fetch_posts: options.fetchPosts,
+                fetch_replies: options.fetchReplies
+            });
+
+            const response = await fetch(`/api/v1/ingestion/ingest/${accountId}?${params}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to sync account');
             }
-        });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Failed to sync account');
+            const result = await response.json();
+            console.log('Sync result:', result);
+            
+            // Show success message
+            this.showNotification('success', result.message || 'Data synced successfully');
+            
+            // Refresh dashboard data to show new posts
+            if (this.currentDashboard && this.currentDashboard.refresh) {
+                await this.currentDashboard.refresh();
+            }
+            
+            return result;
+            
+        } catch (error) {
+            console.error('Sync error:', error);
+            this.showNotification('error', error.message || 'Failed to sync data');
+            throw error;
         }
-
-        const result = await response.json();
-        console.log('Sync result:', result);
-        
-        // Show success message
-        this.showNotification('success', result.message || 'Data synced successfully');
-        
-        // Refresh dashboard data to show new posts
-        if (this.currentDashboard && this.currentDashboard.refresh) {
-            await this.currentDashboard.refresh();
-        }
-        
-        return result;
-        
-    } catch (error) {
-        console.error('Sync error:', error);
-        this.showNotification('error', error.message || 'Failed to sync data');
-        throw error;
     }
-}
+
+    /**
+     * Sync only posts (no replies)
+     */
+    async syncPosts(accountId) {
+        return this.syncAccount(accountId, { fetchPosts: true, fetchReplies: false });
+    }
+
+    /**
+     * Sync only replies (no new posts)
+     */
+    async syncReplies(accountId) {
+        return this.syncAccount(accountId, { fetchPosts: false, fetchReplies: true });
+    }
+
+    /**
+     * Sync both posts and replies
+     */
+    async syncAll(accountId) {
+        return this.syncAccount(accountId, { fetchPosts: true, fetchReplies: true });
+    }
 
     /**
      * Logout user

@@ -361,6 +361,23 @@ body {
     gap: 12px;
 }
 
+.account-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.account-actions button {
+    font-size: 13px;
+    padding: 8px 14px;
+    white-space: nowrap;
+}
+
+.account-actions button i {
+    margin-right: 4px;
+    font-size: 12px;
+}
+
 .platform-badge {
     background: linear-gradient(135deg, var(--accent-purple), var(--accent-magenta));
     color: #FFFFFF;

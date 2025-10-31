@@ -3,8 +3,10 @@ import tweepy
 import hashlib
 import base64
 import requests
+import json
+from pathlib import Path
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.models import SocialAccount, Post, Comment
@@ -34,25 +36,96 @@ class TwitterService:
         self.bearer_token = settings.TWITTER_BEARER_TOKEN
         self.oauth_handler = None  # Store the handler to maintain state
         
-        # Rate limiting tracking
-        self.request_count = 0
-        self.last_reset = datetime.now()
+        # Rate limiting tracking - persistent across requests
+        self.rate_limit_file = Path("twitter_rate_limits.json")
         self.rate_limit_window = 900  # 15 minutes in seconds
-        self.max_requests = 180  # Twitter's default app rate limit
+        self._load_rate_limits()
+    
+    def _load_rate_limits(self):
+        """Load rate limits from persistent file"""
+        if self.rate_limit_file.exists():
+            try:
+                with open(self.rate_limit_file, 'r') as f:
+                    data = json.load(f)
+                    # Load tweet fetching rate limits
+                    self.last_tweet_request = datetime.fromisoformat(data.get('last_tweet_request', '2000-01-01T00:00:00'))
+                    self.tweet_request_count = data.get('tweet_request_count', 0)
+                    # Load reply searching rate limits (separate endpoint)
+                    self.last_reply_request = datetime.fromisoformat(data.get('last_reply_request', '2000-01-01T00:00:00'))
+                    self.reply_request_count = data.get('reply_request_count', 0)
+            except Exception as e:
+                print(f"Error loading rate limits: {e}")
+                self._reset_rate_limits()
+        else:
+            self._reset_rate_limits()
+    
+    def _reset_rate_limits(self):
+        """Reset rate limit counters"""
+        self.last_tweet_request = datetime.min
+        self.tweet_request_count = 0
+        self.last_reply_request = datetime.min
+        self.reply_request_count = 0
+    
+    def _save_rate_limits(self):
+        """Save rate limits to persistent file"""
+        data = {
+            'last_tweet_request': self.last_tweet_request.isoformat(),
+            'tweet_request_count': self.tweet_request_count,
+            'last_reply_request': self.last_reply_request.isoformat(),
+            'reply_request_count': self.reply_request_count
+        }
+        try:
+            with open(self.rate_limit_file, 'w') as f:
+                json.dump(data, f)
+        except Exception as e:
+            print(f"Error saving rate limits: {e}")
+    
     def _check_rate_limit(self) -> bool:
-        """Check if we're within rate limits"""
+        """DEPRECATED: Use _check_tweet_rate_limit or _check_reply_rate_limit instead"""
+        return self._check_tweet_rate_limit()
+    
+    def _check_tweet_rate_limit(self) -> bool:
+        """Check if we can make a tweet fetch request"""
         now = datetime.now()
-        # Reset counter if we're in a new window
-        if (now - self.last_reset).total_seconds() >= self.rate_limit_window:
-            self.request_count = 0
-            self.last_reset = now
+        max_requests = 100  # Conservative limit (Twitter allows 180 per 15 min)
+        
+        # Reset counter if window has passed
+        if (now - self.last_tweet_request).total_seconds() >= self.rate_limit_window:
+            self.tweet_request_count = 0
+            self.last_tweet_request = now
+            self._save_rate_limits()
             return True
         
         # Check if we're under the limit
-        if self.request_count < self.max_requests:
-            self.request_count += 1
+        if self.tweet_request_count < max_requests:
+            self.tweet_request_count += 1
+            self.last_tweet_request = now
+            self._save_rate_limits()
             return True
         
+        # Rate limit exceeded
+        return False
+    
+    def _check_reply_rate_limit(self) -> bool:
+        """Check if we can make a reply search request"""
+        now = datetime.now()
+        max_requests = 50  # Very conservative for search endpoint (Twitter allows 180 but shared across app)
+        
+        # Reset counter if window has passed
+        if (now - self.last_reply_request).total_seconds() >= self.rate_limit_window:
+            self.reply_request_count = 0
+            self.last_reply_request = now
+            self._save_rate_limits()
+            return True
+        
+        # Check if we're under the limit
+        if self.reply_request_count < max_requests:
+            self.reply_request_count += 1
+            self.last_reply_request = now
+            self._save_rate_limits()
+            return True
+        
+        # Rate limit exceeded
         return False
 
     def _generate_code_verifier(self) -> str:
@@ -229,10 +302,10 @@ class TwitterService:
         
         try:
             # Check rate limits before making the request
-            if not self._check_rate_limit():
-                wait_time = (self.last_reset + datetime.timedelta(seconds=self.rate_limit_window) - datetime.now()).seconds
+            if not self._check_tweet_rate_limit():
+                wait_time = (self.last_tweet_request + timedelta(seconds=self.rate_limit_window) - datetime.now()).total_seconds()
                 wait_minutes = round(wait_time / 60, 1)
-                return {"posts_created": 0, "error": f"Rate limit reached. Please wait {wait_minutes} minutes before trying again."}
+                return {"posts_created": 0, "error": f"Rate limit reached for fetching tweets. Please wait {wait_minutes} minutes before trying again."}
 
             # Fetch tweets with smaller batch size to avoid rate limits
             tweets = client.get_users_tweets(
@@ -321,7 +394,7 @@ class TwitterService:
         # Decrypt token
         access_token = token_encryption.decrypt(social_account.access_token)
         
-        # Create client with OAuth access token and rate limiting
+        # Create client with OAuth access token 
         client = tweepy.Client(
             access_token=access_token,
             access_token_secret=None,
@@ -330,17 +403,17 @@ class TwitterService:
             bearer_token=self.bearer_token,
             
         )
-        print("Tweepy client created for fetching replies")  
-        
+        print("Tweepy client created for fetching replies")
+        #print("Rate limit status:", client.rate_limit_status()['resources'])
         # Search for replies
         query = f"conversation_id:{post.platform_post_id}"
         
         try:
             # Check rate limits before making the request
-            if not self._check_rate_limit():
-                wait_time = (self.last_reset + datetime.timedelta(seconds=self.rate_limit_window) - datetime.now()).seconds
+            if not self._check_reply_rate_limit():
+                wait_time = (self.last_reply_request + timedelta(seconds=self.rate_limit_window) - datetime.now()).total_seconds()
                 wait_minutes = round(wait_time / 60, 1)
-                raise tweepy.TooManyRequests(f"Rate limit reached. Please wait {wait_minutes} minutes.")
+                raise ValueError(f"Rate limit reached for searching replies. Please wait {wait_minutes} minutes before trying again.")
 
             replies = client.search_recent_tweets(
                 query=query,

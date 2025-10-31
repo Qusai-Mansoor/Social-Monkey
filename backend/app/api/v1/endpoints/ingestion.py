@@ -29,15 +29,23 @@ async def get_connected_accounts(
 async def ingest_data(
     account_id: int,
     max_posts: int = 100,
+    fetch_posts: bool = True,
+    fetch_replies: bool = True,
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
     """
-    Ingest posts and comments from a connected social account
+    Ingest posts and/or comments from a connected social account
+    
+    Parameters:
+    - account_id: The social account ID to fetch data from
+    - max_posts: Maximum number of posts to fetch (default: 100)
+    - fetch_posts: Whether to fetch new posts (default: True)
+    - fetch_replies: Whether to fetch replies for posts (default: True)
     
     Steps:
-    1. Fetch user's posts from the platform
-    2. For each post, fetch comments/replies
+    1. Optionally fetch user's posts from the platform
+    2. Optionally fetch comments/replies for posts
     3. Preprocess all content
     4. Store in database
     5. Return ingestion statistics
@@ -57,69 +65,45 @@ async def ingest_data(
     
     try:
         if social_account.platform == "twitter":
-            # Fetch tweets
-            result = await twitter_service.fetch_user_tweets(
-                social_account=social_account,
-                db=db,
-                max_results=max_posts
-            )
-            
-            # Check if there was an error
-            if "error" in result:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS if "Rate limit" in result["error"] else status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=result["error"]
-                )
-            
-            posts_fetched = result["posts_created"]
-            
-            # Only fetch replies if we successfully got posts
+            posts_fetched = 0
             total_comments = 0
-            if posts_fetched > 0:
-                # Fetch replies for each post (limit to recent posts to avoid rate limits)
-                posts = db.query(Post).filter(
-                    Post.social_account_id == account_id
-                ).order_by(Post.created_at_platform.desc()).limit(5).all()  # Reduced to 5 most recent posts
+            
+            # Step 1: Fetch new posts if requested
+            if fetch_posts:
+                result = await twitter_service.fetch_user_tweets(
+                    social_account=social_account,
+                    db=db,
+                    max_results=max_posts
+                )
                 
-                for post in posts:
-                    try:
-                        comments_count = await twitter_service.fetch_tweet_replies(
-                            post=post,
-                            social_account=social_account,
-                            db=db,
-                            max_results=10  # Reduced from 20 to 10
-                        )
-                        total_comments += comments_count
-                    except ValueError as e:
-                        if "Rate limit" in str(e):
-                            # If we hit rate limit, stop processing more posts
-                            return IngestionStatus(
-                                status="partial_success",
-                                posts_fetched=posts_fetched,
-                                comments_fetched=total_comments,
-                                message=f"Partially completed: Fetched {posts_fetched} posts and {total_comments} comments. {str(e)}"
-                            )
-                        else:
-                            print(f"Error fetching replies for post {post.id}: {e}")
-                            continue  # Skip this post but continue with others
-            else:
-                # If no posts were fetched, we check if new replies can be fetched for existing posts
-                existing_posts = db.query(Post).filter(
+                # Check if there was an error
+                if "error" in result:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS if "Rate limit" in result["error"] else status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=result["error"]
+                    )
+                
+                posts_fetched = result["posts_created"]
+            
+            # Step 2: Fetch replies if requested
+            if fetch_replies:
+                # Get posts to fetch replies for (either newly fetched or existing)
+                posts_to_process = db.query(Post).filter(
                     Post.social_account_id == account_id
-                ).order_by(Post.created_at_platform.desc()).limit(5).all()
-
-                for post in existing_posts:
+                ).order_by(Post.created_at_platform.desc()).limit(5).all()  # Limit to 5 most recent posts
+                
+                for post in posts_to_process:
                     try:
                         comments_count = await twitter_service.fetch_tweet_replies(
                             post=post,
                             social_account=social_account,
                             db=db,
-                            max_results=10  # Reduced from 20 to 10
+                            max_results=10  # Limit replies per post
                         )
                         total_comments += comments_count
                     except ValueError as e:
                         if "Rate limit" in str(e):
-                            # If we hit rate limit, stop processing more posts
+                            # If we hit rate limit, return partial success
                             return IngestionStatus(
                                 status="partial_success",
                                 posts_fetched=posts_fetched,
@@ -129,13 +113,22 @@ async def ingest_data(
                         else:
                             print(f"Error fetching replies for post {post.id}: {e}")
                             continue  # Skip this post but continue with others
-
+            
+            # Determine the appropriate message
+            if fetch_posts and fetch_replies:
+                message = f"Successfully ingested {posts_fetched} posts and {total_comments} comments"
+            elif fetch_posts:
+                message = f"Successfully fetched {posts_fetched} posts"
+            elif fetch_replies:
+                message = f"Successfully fetched {total_comments} comments for existing posts"
+            else:
+                message = "No operation performed (both fetch_posts and fetch_replies were False)"
 
             return IngestionStatus(
                 status="success",
                 posts_fetched=posts_fetched,
                 comments_fetched=total_comments,
-                message=f"Successfully ingested {posts_fetched} posts and {total_comments} comments"
+                message=message
             )
         
         else:
