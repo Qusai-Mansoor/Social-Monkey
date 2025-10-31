@@ -19,7 +19,15 @@ const API_ENDPOINTS = {
     ACCOUNTS: `${API_CONFIG.API_PREFIX}/data/accounts`,
     POSTS: `${API_CONFIG.API_PREFIX}/data/posts`,
     STATS: `${API_CONFIG.API_PREFIX}/data/stats`,
-    INGEST: (accountId) => `${API_CONFIG.API_PREFIX}/data/ingest/${accountId}`
+    INGEST: (accountId) => `${API_CONFIG.API_PREFIX}/data/ingest/${accountId}`,
+    
+    // Analytics endpoints
+    EMOTION_ANALYSIS: `${API_CONFIG.API_PREFIX}/analytics/emotion-analysis`,
+    SLANG_ANALYSIS: `${API_CONFIG.API_PREFIX}/analytics/slang-analysis`,
+    TOP_POSTS: `${API_CONFIG.API_PREFIX}/analytics/top-posts`,
+    ENGAGEMENT_TRENDS: `${API_CONFIG.API_PREFIX}/analytics/engagement-trends`,
+    POST_FREQUENCY: `${API_CONFIG.API_PREFIX}/analytics/post-frequency`,
+    ADVANCED_ANALYTICS: `${API_CONFIG.API_PREFIX}/analytics/advanced-analytics`
 };
 
 export {
