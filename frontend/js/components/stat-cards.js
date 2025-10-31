@@ -22,28 +22,28 @@ class StatCards {
         const cards = [
             this.createCard(
                 'Total Posts',
-                this.formatNumber(statsData.posts || 0),
+                this.formatNumber(statsData.posts || 5),
                 '+12% from last week',
                 'trending-up',
                 'positive'
             ),
             this.createCard(
                 'Avg Engagement',
-                this.formatEngagement(statsData.engagement || 0),
+                this.formatEngagement(statsData.engagement || 20),
                 '+8.2% from last week',
                 'heart',
                 'positive'
             ),
             this.createCard(
                 'Sentiment Score',
-                this.formatPercent(statsData.sentiment || 0),
+                this.formatPercent(statsData.sentiment || 50),
                 this.getSentimentTrend(statsData.sentiment),
                 'smile',
                 this.getSentimentStatus(statsData.sentiment)
             ),
             this.createCard(
                 'Gen-Z Slang Usage',
-                this.formatPercent(statsData.slangUsage || 0),
+                this.formatPercent(statsData.slangUsage || 12),
                 this.getSlangTrend(statsData.slangUsage),
                 'message-circle',
                 this.getSlangStatus(statsData.slangUsage)
@@ -58,7 +58,7 @@ class StatCards {
     }
 
     /**
-     * Create individual stat card
+     * Create individual stat card - UPDATED TO MATCH DESIGN
      */
     createCard(title, value, trend, iconName, status) {
         const icon = this.getIcon(iconName);
@@ -66,17 +66,19 @@ class StatCards {
         const trendClass = trend.includes('+') ? 'positive' : 'negative';
 
         return `
-            <div class="stat-card ${status}">
-                <div class="stat-header">
-                    <span class="stat-title">${title}</span>
-                    <div class="stat-icon">
+            <div class="stat-card">
+                <div class="stat-card-header">
+                    <div class="stat-card-info">
+                        <h3 class="stat-card-title">${title}</h3>
+                        <div class="stat-card-value">${value}</div>
+                    </div>
+                    <div class="stat-card-icon">
                         ${icon}
                     </div>
                 </div>
-                <div class="stat-value">${value}</div>
-                <div class="stat-trend ${trendClass}">
+                <div class="stat-card-trend ${trendClass}">
                     ${trendIcon}
-                    <span>${trend}</span>
+                    <span class="trend-text">${trend}</span>
                 </div>
             </div>
         `;

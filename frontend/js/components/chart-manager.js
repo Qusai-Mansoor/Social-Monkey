@@ -489,6 +489,127 @@ class ChartManager {
 
         return this.charts[canvasId];
     }
+
+    /**
+     * Create generic chart (supports any Chart.js type)
+     * @param {HTMLCanvasElement|string} canvas - Canvas element or canvas ID
+     * @param {string} type - Chart type (pie, doughnut, bar, line, radar, etc.)
+     * @param {object} data - Chart data
+     * @param {object} options - Chart options
+     */
+    createChart(canvas, type, data, options = {}) {
+        // Get canvas element
+        let ctx;
+        if (typeof canvas === 'string') {
+            ctx = document.getElementById(canvas);
+        } else if (canvas instanceof HTMLCanvasElement) {
+            ctx = canvas;
+        } else {
+            console.error('Invalid canvas parameter:', canvas);
+            return null;
+        }
+
+        if (!ctx) {
+            console.error('Canvas element not found:', canvas);
+            return null;
+        }
+
+        // Get canvas ID for chart storage
+        const canvasId = ctx.id || `chart_${Date.now()}`;
+
+        // Destroy existing chart
+        if (this.charts[canvasId]) {
+            this.charts[canvasId].destroy();
+        }
+
+        // Default options based on theme
+        const defaultOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: 'rgba(255, 255, 255, 0.8)',
+                        padding: 15,
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#111533',
+                    titleColor: '#FFFFFF',
+                    bodyColor: 'rgba(255, 255, 255, 0.8)',
+                    borderColor: 'rgba(124, 58, 237, 0.5)',
+                    borderWidth: 1,
+                    padding: 12
+                }
+            }
+        };
+
+        // Add scales for chart types that need them
+        if (['bar', 'line', 'radar'].includes(type)) {
+            defaultOptions.scales = {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.8)'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.8)'
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            };
+        }
+
+        // Merge options
+        const mergedOptions = this.deepMerge(defaultOptions, options);
+
+        // Create chart
+        this.charts[canvasId] = new Chart(ctx, {
+            type: type,
+            data: data,
+            options: mergedOptions
+        });
+
+        return this.charts[canvasId];
+    }
+
+    /**
+     * Deep merge two objects
+     */
+    deepMerge(target, source) {
+        const output = Object.assign({}, target);
+        if (this.isObject(target) && this.isObject(source)) {
+            Object.keys(source).forEach(key => {
+                if (this.isObject(source[key])) {
+                    if (!(key in target)) {
+                        Object.assign(output, { [key]: source[key] });
+                    } else {
+                        output[key] = this.deepMerge(target[key], source[key]);
+                    }
+                } else {
+                    Object.assign(output, { [key]: source[key] });
+                }
+            });
+        }
+        return output;
+    }
+
+    /**
+     * Check if value is an object
+     */
+    isObject(item) {
+        return item && typeof item === 'object' && !Array.isArray(item);
+    }
 }
 
 // Create global instance

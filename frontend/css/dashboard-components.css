@@ -30,12 +30,12 @@
 }
 
 /* ========================================
-   STAT CARDS (Top Overview Cards)
+   STAT CARDS - UPDATED TO MATCH DESIGN
    ======================================== */
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 20px;
     margin-bottom: 32px;
 }
@@ -45,12 +45,13 @@
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: 24px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 .stat-card::before {
@@ -75,51 +76,92 @@
     opacity: 1;
 }
 
-.stat-icon {
-    font-size: 40px;
-    width: 64px;
-    height: 64px;
+/* Card Header - Title, Value, and Icon */
+.stat-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.stat-card-info {
+    flex: 1;
+}
+
+.stat-card-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0 0 8px 0;
+    line-height: 1.2;
+}
+
+.stat-card-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1;
+}
+
+.stat-card-icon {
+    width: 48px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(218, 108, 255, 0.1));
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(218, 108, 255, 0.1));
     border-radius: var(--radius-md);
     flex-shrink: 0;
 }
 
-.stat-info h3 {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 0 0 4px 0;
+.stat-card-icon svg {
+    width: 24px;
+    height: 24px;
+    color: var(--accent-purple);
 }
 
-.stat-info p {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin: 0;
-}
-
-.stat-change {
-    font-size: 12px;
+/* Trend Section - Bottom of Card */
+.stat-card-trend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
     font-weight: 600;
-    padding: 4px 8px;
-    border-radius: 4px;
-    margin-left: 8px;
+    margin-top: auto;
 }
 
-.stat-change.positive {
-    color: var(--success);
-    background: rgba(0, 230, 118, 0.1);
+.stat-card-trend svg {
+    width: 14px;
+    height: 14px;
 }
 
-.stat-change.negative {
-    color: var(--danger);
-    background: rgba(255, 59, 48, 0.1);
+.stat-card-trend.positive {
+    color: #10B981;
+}
+
+.stat-card-trend.positive svg {
+    color: #10B981;
+}
+
+.stat-card-trend.negative {
+    color: #EF4444;
+}
+
+.stat-card-trend.negative svg {
+    color: #EF4444;
+}
+
+.stat-card-trend.neutral {
+    color: var(--text-secondary);
+}
+
+.trend-text {
+    color: var(--text-secondary);
 }
 
 /* ========================================
-   ACTION CARDS (Emotion Analytics, etc.)
+   ACTION CARDS (Emotion Analytics, etc.
    ======================================== */
 
 .action-cards-grid {
@@ -412,6 +454,7 @@
     gap: 16px;
     align-items: center;
     flex-wrap: wrap;
+    margin-bottom: 32px;
 }
 
 .filter-group {
@@ -545,10 +588,11 @@
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
+    background: rgba(124, 58, 237, 0.1);
 }
 
 .posts-table thead {
-    background: rgba(124, 58, 237, 0.1);
+    padding: 16px;
 }
 
 .posts-table .table-header {
