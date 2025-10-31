@@ -33,6 +33,28 @@ class TwitterService:
         self.callback_url = settings.TWITTER_CALLBACK_URL
         self.bearer_token = settings.TWITTER_BEARER_TOKEN
         self.oauth_handler = None  # Store the handler to maintain state
+        
+        # Rate limiting tracking
+        self.request_count = 0
+        self.last_reset = datetime.now()
+        self.rate_limit_window = 900  # 15 minutes in seconds
+        self.max_requests = 180  # Twitter's default app rate limit
+    def _check_rate_limit(self) -> bool:
+        """Check if we're within rate limits"""
+        now = datetime.now()
+        # Reset counter if we're in a new window
+        if (now - self.last_reset).total_seconds() >= self.rate_limit_window:
+            self.request_count = 0
+            self.last_reset = now
+            return True
+        
+        # Check if we're under the limit
+        if self.request_count < self.max_requests:
+            self.request_count += 1
+            return True
+        
+        return False
+
     def _generate_code_verifier(self) -> str:
         """Generate a code verifier for PKCE"""
         return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
@@ -201,33 +223,52 @@ class TwitterService:
             access_token_secret=None,  # For OAuth 2.0, this is None
             consumer_key=self.client_id,
             consumer_secret=self.client_secret,
-            bearer_token=self.bearer_token,
-            wait_on_rate_limit=False  # Automatically handle rate limits
+            bearer_token=self.bearer_token
         )
         print("Tweepy client created for fetching tweets")
         
         try:
+            # Check rate limits before making the request
+            if not self._check_rate_limit():
+                wait_time = (self.last_reset + datetime.timedelta(seconds=self.rate_limit_window) - datetime.now()).seconds
+                wait_minutes = round(wait_time / 60, 1)
+                return {"posts_created": 0, "error": f"Rate limit reached. Please wait {wait_minutes} minutes before trying again."}
+
             # Fetch tweets with smaller batch size to avoid rate limits
             tweets = client.get_users_tweets(
                 id=social_account.platform_user_id,
-                max_results=min(max_results, 20),  # Twitter API v2 limit is 100, but start smaller
-                tweet_fields=['created_at', 'public_metrics', 'lang'],
-                exclude=['retweets', 'replies']
+                max_results=min(max_results, 10),  # Reduced to 10 to be more conservative
+                tweet_fields=['created_at', 'public_metrics', 'lang', 'conversation_id', 'in_reply_to_user_id'],
+                exclude=['retweets']  # Remove 'replies' from exclude to get all tweets
             )
-        # except tweepy.TooManyRequests as e:
-        #     print(f"Rate limit exceeded: {e}")
-        #     return {"posts_created": 0, "error": "Rate limit exceeded. Please try again later."}
+        
+        except tweepy.TooManyRequests as e:
+            # Get the reset time from the response headers
+            reset_time = None
+            if hasattr(e.response, 'headers') and 'x-rate-limit-reset' in e.response.headers:
+                reset_time = datetime.fromtimestamp(int(e.response.headers['x-rate-limit-reset']))
+                wait_time = (reset_time - datetime.now()).total_seconds()
+                wait_minutes = round(wait_time / 60, 1)
+                error_msg = f"Rate limit exceeded. Please wait {wait_minutes} minutes before trying again."
+            else:
+                error_msg = "Rate limit exceeded. Please wait 15 minutes before trying again."
+            
+            print(f"Rate limit error: {error_msg}")
+            return {"posts_created": 0, "error": error_msg}
+            
         except tweepy.Unauthorized as e:
             print(f"Unauthorized access: {e}")
             return {"posts_created": 0, "error": "Unauthorized access. Please re-authenticate."}
-        except Exception as e:
-            print(f"Error fetching tweets: {e}")
-            return {"posts_created": 0, "error": str(e)}
+        
         
         posts_created = 0
         
         if tweets and tweets.data:
             for tweet in tweets.data:
+                # Skip if this is a reply to someone else's tweet
+                if tweet.in_reply_to_user_id and str(tweet.in_reply_to_user_id) != social_account.platform_user_id:
+                    continue
+                
                 # Check if post already exists
                 existing_post = db.query(Post).filter(
                     Post.platform_post_id == str(tweet.id)
@@ -287,7 +328,7 @@ class TwitterService:
             consumer_key=self.client_id,
             consumer_secret=self.client_secret,
             bearer_token=self.bearer_token,
-            wait_on_rate_limit=True
+            
         )
         print("Tweepy client created for fetching replies")  
         
@@ -295,26 +336,48 @@ class TwitterService:
         query = f"conversation_id:{post.platform_post_id}"
         
         try:
+            # Check rate limits before making the request
+            if not self._check_rate_limit():
+                wait_time = (self.last_reset + datetime.timedelta(seconds=self.rate_limit_window) - datetime.now()).seconds
+                wait_minutes = round(wait_time / 60, 1)
+                raise tweepy.TooManyRequests(f"Rate limit reached. Please wait {wait_minutes} minutes.")
+
             replies = client.search_recent_tweets(
                 query=query,
-                max_results=min(max_results, 20),
-                tweet_fields=['created_at', 'public_metrics', 'author_id'],
+                max_results=min(max_results, 10),  # Reduced to 10 to be more conservative
+                tweet_fields=['created_at', 'public_metrics', 'author_id', 'in_reply_to_user_id', 'conversation_id'],
+                expansions=['author_id']
             )
         except tweepy.TooManyRequests as e:
-            print(f"Rate limit exceeded for replies: {e}")
-            return 0
+            # Get the reset time from the response headers
+            reset_time = None
+            if hasattr(e.response, 'headers') and 'x-rate-limit-reset' in e.response.headers:
+                reset_time = datetime.fromtimestamp(int(e.response.headers['x-rate-limit-reset']))
+                wait_time = (reset_time - datetime.now()).total_seconds()
+                wait_minutes = round(wait_time / 60, 1)
+                error_msg = f"Rate limit exceeded. Please wait {wait_minutes} minutes before trying again."
+            else:
+                error_msg = str(e)
+            print(f"Rate limit error for replies: {error_msg}")
+            raise ValueError(error_msg)
         except tweepy.Unauthorized as e:
             print(f"Unauthorized access for replies: {e}")
-            return 0
+            raise ValueError(f"Unauthorized access: {str(e)}")
         except Exception as e:
             print(f"Error fetching replies: {e}")
-            return 0
+            raise ValueError(f"Error fetching replies: {str(e)}")
         
         comments_created = 0
         
         try:
             if replies and replies.data:
                 for reply in replies.data:
+                    # Only process if it's actually a reply to the original post
+                # or a reply in the same thread
+                    if (str(reply.in_reply_to_user_id) != social_account.platform_user_id or 
+                        str(reply.conversation_id) != post.platform_post_id):
+                        continue
+                    
                     # Skip if it's the original tweet
                     if str(reply.id) == post.platform_post_id:
                         continue
