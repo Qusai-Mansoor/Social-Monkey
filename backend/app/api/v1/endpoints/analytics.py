@@ -11,145 +11,58 @@ from app.models.models import User, SocialAccount, Post
 
 router = APIRouter()
 
-# Gen-Z Slang Dictionary for analysis
-GEN_Z_SLANG = {
-    # Communication & Reactions
-    'no cap': 'no lie, for real',
-    'cap': 'lie, false',
-    'bet': 'yes, okay, sure',
-    'say less': 'I understand, say no more',
-    'periodt': 'period, end of discussion',
-    'facts': 'true, agree',
-    'fr': 'for real',
-    'ngl': 'not gonna lie',
-    'tbh': 'to be honest',
-    'ong': 'on god',
-    'deadass': 'seriously, for real',
-    
-    # Positive/Approval
-    'bussin': 'really good, amazing',
-    'slaps': 'really good',
-    'fire': 'awesome, cool',
-    'lit': 'exciting, fun',
-    'slayed': 'did amazing',
-    'ate': 'did really well',
-    'served': 'delivered perfectly',
-    'understood the assignment': 'did exactly what was needed',
-    'main character': 'confident, taking charge',
-    'vibe': 'mood, feeling',
-    'vibes': 'good feelings',
-    
-    # Negative/Disapproval
-    'mid': 'mediocre, average',
-    'cringe': 'embarrassing',
-    'ick': 'gross, unappealing',
-    'sus': 'suspicious',
-    'toxic': 'harmful, negative',
-    'clown': 'foolish person',
-    'pressed': 'upset, bothered',
-    'salty': 'bitter, upset',
-    'triggered': 'upset, offended',
-    
-    # Social Media Specific
-    'ratio': 'getting more replies than likes',
-    'stan': 'big fan of',
-    'simp': 'overly devoted to someone',
-    'ship': 'support a relationship',
-    'tea': 'gossip, drama',
-    'spill': 'tell the gossip',
-    'cancel': 'boycott someone',
-    'touch grass': 'go outside, get offline',
-    'chronically online': 'spends too much time online',
-    
-    # Lifestyle & Personality
-    'aesthetic': 'visual style, vibe',
-    'energy': 'vibe, attitude',
-    'aura': 'personal energy',
-    'main character energy': 'confident attitude',
-    'pick me': 'seeking attention',
-    'npc': 'basic person, no personality',
-    'it girl': 'trendy, popular girl',
-    'moment': 'perfect time or situation',
-    'era': 'phase of life',
-    'red flag': 'warning sign',
-    'green flag': 'good sign',
-    
-    # Expressions
-    'slay': 'do amazing',
-    'queen': 'amazing woman',
-    'king': 'amazing man',
-    'bestie': 'best friend',
-    'bae': 'before anyone else',
-    'fam': 'family, close friends',
-    'lowkey': 'somewhat, secretly',
-    'highkey': 'definitely, obviously',
-    'sending me': 'making me laugh',
-    'im deceased': 'very funny',
-    'not me': 'expressing disbelief',
-    'the way': 'emphasis phrase',
-    'pls': 'please',
-    'ur': 'your',
-    'bc': 'because',
-    'rn': 'right now',
-    'af': 'as f***',
-    'asf': 'as f***',
-    'istg': 'I swear to god',
-    'lmao': 'laughing my ass off',
-    'lmfao': 'laughing my f***ing ass off',
-    'idk': 'I don\'t know',
-    'wdym': 'what do you mean',
-    'omg': 'oh my god',
-    'wtf': 'what the f***',
-    'bruh': 'expressing disbelief',
-    'oop': 'oops, awkward',
-    'yikes': 'expression of concern',
-    'oof': 'expression of pain/sympathy'
-}
-
-def analyze_slang(text: str) -> List[str]:
-    """Analyze text for Gen-Z slang terms"""
-    found_slang = []
-    lower_text = text.lower()
-    
-    for term in GEN_Z_SLANG.keys():
-        # Use word boundaries to match whole words/phrases
-        pattern = rf'\b{re.escape(term)}\b'
-        if re.search(pattern, lower_text, re.IGNORECASE):
-            found_slang.append(term)
-    
-    return found_slang
-
-def analyze_emotion(text: str) -> str:
-    """Simple emotion analysis based on keywords"""
-    positive_words = ['good', 'great', 'awesome', 'amazing', 'love', 'happy', 'excellent', 
-                     'wonderful', 'fantastic', 'perfect', 'best', 'beautiful', 'incredible', 
-                     'outstanding', 'brilliant', 'superb', 'magnificent', 'terrific']
-    
-    negative_words = ['bad', 'terrible', 'awful', 'hate', 'sad', 'angry', 'horrible', 
-                     'worst', 'disgusting', 'annoying', 'stupid', 'ugly', 'boring', 
-                     'pathetic', 'miserable', 'dreadful', 'appalling']
-    
-    lower_text = text.lower()
-    positive_score = sum(1 for word in positive_words if word in lower_text)
-    negative_score = sum(1 for word in negative_words if word in lower_text)
-    
-    if positive_score > negative_score:
-        return 'positive'
-    elif negative_score > positive_score:
-        return 'negative'
-    else:
-        return 'neutral'
-
 def calculate_engagement(post: Post) -> int:
     """Calculate total engagement for a post"""
     return (post.likes_count or 0) + (post.retweets_count or 0) + (post.replies_count or 0)
+
+@router.post("/analyze-existing")
+def analyze_existing_posts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Trigger analysis for existing posts that haven't been analyzed yet.
+    """
+    from app.analysis.emotion_engine import analyze_emotion
+    from app.analysis.slang_detector import slang_detector
+
+    # Get user's social accounts
+    account_ids = db.query(SocialAccount.id).filter(SocialAccount.user_id == current_user.id).all()
+    account_ids = [id[0] for id in account_ids]
+    
+    if not account_ids:
+        return {"message": "No social accounts found", "updated_count": 0}
+
+    # Fetch posts that need analysis (where emotion_scores is null)
+    posts = db.query(Post).filter(
+        Post.social_account_id.in_(account_ids),
+        Post.emotion_scores == None
+    ).all()
+    
+    updated_count = 0
+    for post in posts:
+        # Analyze Emotion
+        emotion_result = analyze_emotion(post.content)
+        post.emotion_scores = emotion_result["scores"]
+        post.dominant_emotion = emotion_result["dominant"]
+        post.sentiment_score = emotion_result["sentiment_score"]
+        
+        # Analyze Slang
+        slang_result = slang_detector.detect(post.content)
+        post.detected_slang = slang_result
+        
+        updated_count += 1
+        
+    db.commit()
+    
+    return {"message": "Analysis complete", "updated_count": updated_count}
 
 @router.get("/overview")
 def get_overview_data(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get overview dashboard data with dummy/placeholder values"""
+    """Get overview dashboard data with REAL values from database"""
     try:
         # Get user's social accounts
         accounts = db.query(SocialAccount).filter(
@@ -158,47 +71,77 @@ def get_overview_data(
         
         account_ids = [account.id for account in accounts] if accounts else []
         
+        if not account_ids:
+             return {
+                "total_posts": 0,
+                "total_engagement": 0,
+                "avg_sentiment": 0,
+                "flagged_posts": 0,
+                "emotion_distribution": {}
+            }
+
         # Get real post count
         total_posts = db.query(Post).filter(
             Post.social_account_id.in_(account_ids)
-        ).count() if account_ids else 0
+        ).count()
         
-        # Calculate real engagement
+        # Calculate real engagement and slang usage
         posts = db.query(Post).filter(
             Post.social_account_id.in_(account_ids)
-        ).all() if account_ids else []
+        ).all()
         
         total_engagement = sum(calculate_engagement(post) for post in posts)
+        avg_engagement = total_engagement / total_posts if total_posts > 0 else 0
         
-        # Return data (use dummy values for emotions to match UI mockups)
+        # Calculate Slang Usage (Percentage of posts containing slang)
+        posts_with_slang = 0
+        for post in posts:
+            slang_data = post.detected_slang
+            if slang_data and isinstance(slang_data, dict) and slang_data.get("found_slang"):
+                posts_with_slang += 1
+                
+        slang_usage_percent = (posts_with_slang / total_posts * 100) if total_posts > 0 else 0
+        
+        # Calculate Average Sentiment (0-100 scale)
+        # sentiment_score is -1 to 1. We map it to 0-100.
+        sentiment_scores = [p.sentiment_score for p in posts if p.sentiment_score is not None]
+        avg_sentiment_raw = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0
+        avg_sentiment = int((avg_sentiment_raw + 1) * 50) # Map -1->0, 0->50, 1->100
+        
+        # Count Flagged Posts (Negative emotions)
+        negative_emotions = ['anger', 'sadness', 'disgust', 'disappointment', 'annoyance']
+        flagged_posts = db.query(Post).filter(
+            Post.social_account_id.in_(account_ids),
+            Post.dominant_emotion.in_(negative_emotions)
+        ).count()
+        
+        # Get Emotion Distribution
+        emotion_counts = db.query(Post.dominant_emotion, func.count(Post.id))\
+            .filter(Post.social_account_id.in_(account_ids))\
+            .filter(Post.dominant_emotion != None)\
+            .group_by(Post.dominant_emotion).all()
+            
+        emotion_distribution = {r[0]: r[1] for r in emotion_counts}
+        
         return {
-            "total_posts": total_posts if total_posts > 0 else 6,  # Fallback to dummy
-            "total_engagement": total_engagement if total_engagement > 0 else 7821,
-            "avg_sentiment": 78,  # Dummy value
-            "flagged_posts": 3,  # Dummy value
-            "emotion_distribution": {
-                "joy": 38,
-                "admiration": 27,
-                "neutral": 15,
-                "sarcasm": 12,
-                "anger": 8
-            }
+            "total_posts": total_posts,
+            "total_engagement": total_engagement,
+            "avg_engagement": avg_engagement,
+            "slang_usage_percent": round(slang_usage_percent, 1),
+            "avg_sentiment": avg_sentiment,
+            "flagged_posts": flagged_posts,
+            "emotion_distribution": emotion_distribution
         }
         
     except Exception as e:
-        # Return dummy data on error
+        print(f"Error in overview: {e}")
+        # Return empty structure on error
         return {
-            "total_posts": 6,
-            "total_engagement": 7821,
-            "avg_sentiment": 78,
-            "flagged_posts": 3,
-            "emotion_distribution": {
-                "joy": 38,
-                "admiration": 27,
-                "neutral": 15,
-                "sarcasm": 12,
-                "anger": 8
-            }
+            "total_posts": 0,
+            "total_engagement": 0,
+            "avg_sentiment": 0,
+            "flagged_posts": 0,
+            "emotion_distribution": {}
         }
 
 
@@ -216,42 +159,7 @@ def get_posts(
         ).all()
         
         if not accounts:
-            # Return dummy posts if no accounts connected
-            return [
-                {
-                    "id": 1,
-                    "platform": "Tiktok",
-                    "content": "Just posted a new vlog! Link in bio 🎬",
-                    "created_at_platform": "2025-10-10T12:00:00",
-                    "likes_count": 2341,
-                    "retweets_count": 456,
-                    "replies_count": 234,
-                    "sentiment_label": "joy",
-                    "sentiment_score": 0.93
-                },
-                {
-                    "id": 2,
-                    "platform": "Instagram",
-                    "content": "Behind the scenes of our latest photoshoot 📸",
-                    "created_at_platform": "2025-10-13T15:30:00",
-                    "likes_count": 892,
-                    "retweets_count": 234,
-                    "replies_count": 67,
-                    "sentiment_label": "admiration",
-                    "sentiment_score": 0.91
-                },
-                {
-                    "id": 3,
-                    "platform": "Instagram",
-                    "content": "Morning smoothie routine #energy ✨",
-                    "created_at_platform": "2025-10-15T09:00:00",
-                    "likes_count": 342,
-                    "retweets_count": 68,
-                    "replies_count": 23,
-                    "sentiment_label": "joy",
-                    "sentiment_score": 0.87
-                }
-            ]
+            return []
         
         account_ids = [account.id for account in accounts]
         
@@ -261,42 +169,7 @@ def get_posts(
         ).order_by(desc(Post.created_at_platform)).limit(limit).all()
         
         if not posts:
-            # Return dummy posts if no posts in database
-            return [
-                {
-                    "id": 1,
-                    "platform": "Tiktok",
-                    "content": "Just posted a new vlog! Link in bio 🎬",
-                    "created_at_platform": "2025-10-10T12:00:00",
-                    "likes_count": 2341,
-                    "retweets_count": 456,
-                    "replies_count": 234,
-                    "sentiment_label": "joy",
-                    "sentiment_score": 0.93
-                },
-                {
-                    "id": 2,
-                    "platform": "Instagram",
-                    "content": "Behind the scenes of our latest photoshoot 📸",
-                    "created_at_platform": "2025-10-13T15:30:00",
-                    "likes_count": 892,
-                    "retweets_count": 234,
-                    "replies_count": 67,
-                    "sentiment_label": "admiration",
-                    "sentiment_score": 0.91
-                },
-                {
-                    "id": 3,
-                    "platform": "Instagram",
-                    "content": "Morning smoothie routine #energy ✨",
-                    "created_at_platform": "2025-10-15T09:00:00",
-                    "likes_count": 342,
-                    "retweets_count": 68,
-                    "replies_count": 23,
-                    "sentiment_label": "joy",
-                    "sentiment_score": 0.87
-                }
-            ]
+            return []
         
         # Return real posts
         return [
@@ -308,8 +181,8 @@ def get_posts(
                 "likes_count": post.likes_count or 0,
                 "retweets_count": post.retweets_count or 0,
                 "replies_count": post.replies_count or 0,
-                "sentiment_label": analyze_emotion(post.content or ""),
-                "sentiment_score": 0.75
+                "sentiment_label": post.dominant_emotion or "neutral",
+                "sentiment_score": post.sentiment_score or 0
             }
             for post in posts
         ]
@@ -396,8 +269,12 @@ def get_user_stats(
         total_engagement = 0
         
         for post in posts:
-            slang_terms = analyze_slang(post.content)
-            total_slang_terms += len(slang_terms)
+            # Use stored slang data
+            slang_data = post.detected_slang
+            if slang_data and isinstance(slang_data, dict):
+                # Assuming structure from slang_detector
+                total_slang_terms += slang_data.get('total_count', 0)
+            
             total_engagement += calculate_engagement(post)
         
         avg_engagement = total_engagement // total_posts if total_posts > 0 else 0
@@ -418,7 +295,7 @@ def get_emotion_analysis(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get emotion analysis of user's posts"""
+    """Get emotion analysis of user's posts (Real Data)"""
     try:
         # Get user's social accounts
         accounts = db.query(SocialAccount).filter(
@@ -433,23 +310,45 @@ def get_emotion_analysis(
         
         account_ids = [account.id for account in accounts]
         
-        # Get all posts
-        posts = db.query(Post).filter(
-            Post.social_account_id.in_(account_ids)
-        ).all()
+        # Get all posts that have been analyzed (have dominant_emotion)
+        # OPTIMIZED: Use SQL aggregation instead of fetching all rows
+        emotion_counts = db.query(
+            Post.dominant_emotion, 
+            func.count(Post.id)
+        ).filter(
+            Post.social_account_id.in_(account_ids),
+            Post.dominant_emotion.isnot(None)
+        ).group_by(Post.dominant_emotion).all()
         
         emotions = {"positive": 0, "neutral": 0, "negative": 0}
+        breakdown = {}
+        total_analyzed = 0
         
-        for post in posts:
-            emotion = analyze_emotion(post.content)
-            emotions[emotion] += 1
+        # Simple mapping for aggregation
+        positive_set = {'joy', 'love', 'admiration', 'approval', 'caring', 'excitement', 'gratitude', 'optimism', 'pride', 'relief', 'desire'}
+        negative_set = {'anger', 'annoyance', 'disappointment', 'disapproval', 'disgust', 'embarrassment', 'fear', 'grief', 'nervousness', 'remorse', 'sadness'}
+        
+        for emotion, count in emotion_counts:
+            # Update breakdown
+            breakdown[emotion] = count
+            total_analyzed += count
+            
+            # Update aggregated emotions
+            if emotion in positive_set:
+                emotions["positive"] += count
+            elif emotion in negative_set:
+                emotions["negative"] += count
+            else:
+                emotions["neutral"] += count
         
         return {
             "emotions": emotions,
-            "total_analyzed": len(posts)
+            "breakdown": breakdown,
+            "total_analyzed": total_analyzed
         }
         
     except Exception as e:
+        print(f"Error in emotion-analysis: {e}")
         raise HTTPException(status_code=500, detail=f"Error analyzing emotions: {str(e)}")
 
 @router.get("/slang-analysis")
@@ -457,31 +356,8 @@ def get_slang_analysis(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get Gen-Z slang analysis of user's posts (returns dummy data for now)"""
+    """Get Gen-Z slang analysis of user's posts (Real Data)"""
     try:
-        # Return dummy data matching UI mockup
-        return {
-            "top_terms": [
-                {"term": "slay", "count": 320, "definition": "do amazing"},
-                {"term": "fr fr", "count": 280, "definition": "for real for real"},
-                {"term": "no cap", "count": 230, "definition": "no lie"},
-                {"term": "smh", "count": 190, "definition": "shaking my head"},
-                {"term": "period", "count": 180, "definition": "end of discussion"}
-            ],
-            "total_slang_detected": 10,
-            "total_occurrences": 1975
-        }
-    except Exception as e:
-        # Return dummy data on error
-        return {
-            "top_terms": [
-                {"term": "slay", "count": 320},
-                {"term": "fr fr", "count": 280},
-                {"term": "no cap", "count": 230},
-                {"term": "smh", "count": 190},
-                {"term": "period", "count": 180}
-            ]
-        }
         # Get user's social accounts
         accounts = db.query(SocialAccount).filter(
             SocialAccount.user_id == current_user.id
@@ -491,7 +367,8 @@ def get_slang_analysis(
             return {
                 "slang_frequency": {},
                 "total_slang_terms": 0,
-                "unique_terms": 0
+                "unique_terms": 0,
+                "top_terms": []
             }
         
         account_ids = [account.id for account in accounts]
@@ -505,19 +382,29 @@ def get_slang_analysis(
         total_slang_terms = 0
         
         for post in posts:
-            slang_terms = analyze_slang(post.content)
-            total_slang_terms += len(slang_terms)
-            
-            for term in slang_terms:
-                slang_frequency[term] = slang_frequency.get(term, 0) + 1
+            # Use stored slang data
+            slang_data = post.detected_slang
+            if slang_data and isinstance(slang_data, dict):
+                # Assuming structure: {"found_slang": ["term1", "term2"], "total_count": 2}
+                found_slang = slang_data.get("found_slang", [])
+                total_slang_terms += len(found_slang)
+                
+                for term in found_slang:
+                    slang_frequency[term] = slang_frequency.get(term, 0) + 1
+        
+        # Format for frontend
+        sorted_terms = sorted(slang_frequency.items(), key=lambda x: x[1], reverse=True)
+        top_terms = [{"term": term, "count": count} for term, count in sorted_terms[:10]]
         
         return {
-            "slang_frequency": dict(sorted(slang_frequency.items(), key=lambda x: x[1], reverse=True)),
+            "slang_frequency": dict(sorted_terms),
             "total_slang_terms": total_slang_terms,
-            "unique_terms": len(slang_frequency)
+            "unique_terms": len(slang_frequency),
+            "top_terms": top_terms
         }
         
     except Exception as e:
+        print(f"Error in slang-analysis: {e}")
         raise HTTPException(status_code=500, detail=f"Error analyzing slang: {str(e)}")
 
 @router.get("/top-posts")
@@ -526,7 +413,7 @@ def get_top_posts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get top performing posts by engagement"""
+    """Get top performing posts by engagement (Real Data)"""
     try:
         # Get user's social accounts
         accounts = db.query(SocialAccount).filter(
@@ -538,7 +425,9 @@ def get_top_posts(
         
         account_ids = [account.id for account in accounts]
         
-        # Get posts ordered by engagement
+        # Get posts ordered by engagement (calculated in DB or app)
+        # Since we don't have a total_engagement column, we fetch all and sort in python
+        # For large datasets this should be optimized with a computed column or SQL expression
         posts = db.query(Post).filter(
             Post.social_account_id.in_(account_ids)
         ).all()
@@ -547,8 +436,11 @@ def get_top_posts(
         posts_with_engagement = []
         for post in posts:
             engagement = calculate_engagement(post)
-            emotion = analyze_emotion(post.content)
-            slang_terms = analyze_slang(post.content)
+            
+            # Use stored analysis
+            emotion = post.dominant_emotion or "neutral"
+            slang_data = post.detected_slang or {}
+            slang_terms = slang_data.get("found_slang", []) if isinstance(slang_data, dict) else []
             
             posts_with_engagement.append({
                 "id": post.id,
@@ -569,6 +461,7 @@ def get_top_posts(
         return top_posts
         
     except Exception as e:
+        print(f"Error in top-posts: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting top posts: {str(e)}")
 
 @router.get("/engagement-trends")
@@ -736,13 +629,26 @@ def get_advanced_analytics(
         top_post = None
         max_engagement = 0
         
+        # Simple mapping for aggregation
+        positive_set = {'joy', 'love', 'admiration', 'approval', 'caring', 'excitement', 'gratitude', 'optimism', 'pride', 'relief', 'desire'}
+        negative_set = {'anger', 'annoyance', 'disappointment', 'disapproval', 'disgust', 'embarrassment', 'fear', 'grief', 'nervousness', 'remorse', 'sadness'}
+        
         for post in posts:
             # Emotion analysis
-            emotion = analyze_emotion(post.content)
-            emotions[emotion] += 1
+            emotion_label = post.dominant_emotion
+            if emotion_label in positive_set:
+                emotions["positive"] += 1
+            elif emotion_label in negative_set:
+                emotions["negative"] += 1
+            else:
+                emotions["neutral"] += 1
             
             # Slang analysis
-            slang_terms = analyze_slang(post.content)
+            slang_data = post.detected_slang
+            slang_terms = []
+            if slang_data and isinstance(slang_data, dict):
+                slang_terms = slang_data.get("found_slang", [])
+                
             for term in slang_terms:
                 slang_frequency[term] = slang_frequency.get(term, 0) + 1
             
@@ -791,3 +697,103 @@ def get_advanced_analytics(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting advanced analytics: {str(e)}")
+
+@router.get("/dashboard/emotion-distribution")
+def get_emotion_distribution(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get the distribution of dominant emotions across all user posts.
+    Returns: [{"emotion": "joy", "count": 15}, ...]
+    """
+    # Get user's social accounts
+    account_ids = db.query(SocialAccount.id).filter(SocialAccount.user_id == current_user.id).all()
+    account_ids = [id[0] for id in account_ids]
+    
+    if not account_ids:
+        return []
+
+    results = db.query(Post.dominant_emotion, func.count(Post.id))\
+        .filter(Post.social_account_id.in_(account_ids))\
+        .filter(Post.dominant_emotion != None)\
+        .group_by(Post.dominant_emotion).all()
+        
+    return [{"emotion": r[0], "count": r[1]} for r in results]
+
+@router.get("/dashboard/slang-insights")
+def get_slang_insights(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get the most frequently used slang terms.
+    Returns: [{"term": "no cap", "count": 10, "meaning": "..."}, ...]
+    """
+    # Get user's social accounts
+    account_ids = db.query(SocialAccount.id).filter(SocialAccount.user_id == current_user.id).all()
+    account_ids = [id[0] for id in account_ids]
+    
+    if not account_ids:
+        return []
+
+    # Fetch posts with detected slang
+    posts = db.query(Post.detected_slang)\
+        .filter(Post.social_account_id.in_(account_ids))\
+        .filter(Post.detected_slang != None).all()
+    
+    slang_counts = {}
+    slang_meanings = {}
+    
+    for post in posts:
+        # post.detected_slang is a list of dicts: [{"term": "no cap", "meaning": "..."}]
+        if post.detected_slang:
+            for item in post.detected_slang: 
+                term = item.get('term')
+                if term:
+                    slang_counts[term] = slang_counts.get(term, 0) + 1
+                    if term not in slang_meanings:
+                        slang_meanings[term] = item.get('meaning', '')
+            
+    # Sort by count descending
+    sorted_slang = sorted(slang_counts.items(), key=lambda x: x[1], reverse=True)
+    
+    return [
+        {"term": term, "count": count, "meaning": slang_meanings.get(term, "")} 
+        for term, count in sorted_slang[:20]  # Top 20
+    ]
+
+@router.get("/dashboard/negative-triggers")
+def get_negative_triggers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get posts that triggered negative emotions (anger, sadness, disgust).
+    """
+    # Get user's social accounts
+    account_ids = db.query(SocialAccount.id).filter(SocialAccount.user_id == current_user.id).all()
+    account_ids = [id[0] for id in account_ids]
+    
+    if not account_ids:
+        return []
+
+    negative_emotions = ['anger', 'sadness', 'disgust', 'disappointment', 'annoyance']
+    
+    posts = db.query(Post)\
+        .filter(Post.social_account_id.in_(account_ids))\
+        .filter(Post.dominant_emotion.in_(negative_emotions))\
+        .order_by(desc(Post.created_at))\
+        .limit(20)\
+        .all()
+        
+    return [
+        {
+            "id": post.id,
+            "content": post.content,
+            "dominant_emotion": post.dominant_emotion,
+            "emotion_scores": post.emotion_scores,
+            "created_at": post.created_at
+        }
+        for post in posts
+    ]

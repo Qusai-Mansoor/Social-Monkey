@@ -162,6 +162,7 @@ async def get_posts(
         query = query.filter(Post.social_account_id == account_id)
     
     posts = query.offset(skip).limit(limit).all()
+    print(posts)
     return posts
 
 

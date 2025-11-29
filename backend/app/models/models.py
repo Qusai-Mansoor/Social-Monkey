@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Boolean, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.session import Base
@@ -58,6 +58,12 @@ class Post(Base):
     retweets_count = Column(Integer, default=0)
     replies_count = Column(Integer, default=0)
     is_preprocessed = Column(Boolean, default=False)
+
+    # Module 2 & 3: Emotion Analysis & Slang Detection
+    emotion_scores = Column(JSON, nullable=True)  # Stores full breakdown: {"joy": 0.85, "anger": 0.02, ...}
+    dominant_emotion = Column(String, index=True, nullable=True)  # Stores the winner: "joy"
+    detected_slang = Column(JSON, nullable=True)  # Stores detected slang: [{"term": "no cap", "meaning": "..."}]
+    sentiment_score = Column(Float, nullable=True)  # Overall sentiment score (-1.0 to 1.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -81,6 +87,13 @@ class Comment(Base):
     created_at_platform = Column(DateTime(timezone=True), nullable=True)
     likes_count = Column(Integer, default=0)
     is_preprocessed = Column(Boolean, default=False)
+
+    # Module 2 & 3: Emotion Analysis & Slang Detection
+    emotion_scores = Column(JSON, nullable=True)
+    dominant_emotion = Column(String, index=True, nullable=True)
+    detected_slang = Column(JSON, nullable=True)
+    sentiment_score = Column(Float, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

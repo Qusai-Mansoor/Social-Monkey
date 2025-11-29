@@ -44,16 +44,26 @@ class HeatmapAnalysis {
      * Load all necessary data
      */
     async loadData() {
-        const [posts, engagementTrends] = await Promise.all([
-            this.dataLoader.loadPosts(),
-            window.api.getEngagementTrends(this.filters.dateRange)
-        ]);
-
-        return {
-            posts,
-            engagementTrends,
-            processedStats: this.processHeatmapData(posts)
-        };
+        try {
+            // Fetch real posts from API (using getTopPosts with a high limit to get enough data for heatmap)
+            const posts = await window.api.getTopPosts(100); 
+            
+            // We don't have a specific engagement trends endpoint yet that returns daily data, 
+            // but we can calculate it from the posts on the client side for now.
+            
+            return {
+                posts,
+                engagementTrends: [], // Placeholder
+                processedStats: this.processHeatmapData(posts)
+            };
+        } catch (error) {
+            console.error('Error loading heatmap data:', error);
+            return {
+                posts: [],
+                engagementTrends: [],
+                processedStats: this.getDefaultStats()
+            };
+        }
     }
 
     /**

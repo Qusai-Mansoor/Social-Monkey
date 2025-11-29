@@ -95,6 +95,16 @@ class ApiService {
     }
 
     // ============================================
+    // ANALYTICS METHODS
+    // ============================================
+
+    async triggerAnalysis() {
+        return this.request('/api/v1/analytics/analyze-existing', {
+            method: 'POST'
+        });
+    }
+
+    // ============================================
     // DATA METHODS
     // ============================================
 
@@ -138,23 +148,17 @@ class ApiService {
 
     async getTopPosts(limit = 5) {
         try {
-            const response = await this.request(`/api/v1/ingestion/posts?limit=${limit}`);
+            // Use the dedicated analytics endpoint which returns posts sorted by engagement
+            const response = await this.request(`/api/v1/analytics/top-posts?limit=${limit}`);
             
-            // Sort posts by engagement (likes + retweets + replies)
             if (Array.isArray(response)) {
-                return response
-                    .map(post => ({
-                        ...post,
-                        total_engagement: (post.likes_count || 0) + (post.retweets_count || 0) + (post.replies_count || 0)
-                    }))
-                    .sort((a, b) => b.total_engagement - a.total_engagement)
-                    .slice(0, limit);
+                return response;
             }
             
             return [];
         } catch (error) {
-            console.error('Error fetching slang analysis:', error);
-            return { top_terms: [] };
+            console.error('Error fetching top posts:', error);
+            return [];
         }
     }
 

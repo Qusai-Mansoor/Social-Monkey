@@ -17,6 +17,8 @@ import secrets
 from sqlalchemy import Column, String, DateTime
 from app.db.session import Base
 from app.models.models import OAuthState
+from app.analysis.emotion_engine import analyze_emotion
+from app.analysis.slang_detector import slang_detector
 
 
 
@@ -353,6 +355,11 @@ class TwitterService:
                 # Preprocess content
                 preprocessed_text, language = text_preprocessor.preprocess(tweet.text)
                 
+                # Module 2 & 3: Analyze Emotion and Slang
+                # We use the raw text for emotion analysis to capture nuance
+                emotion_result = analyze_emotion(tweet.text)
+                slang_result = slang_detector.detect(tweet.text)
+
                 # Create post
                 post = Post(
                     social_account_id=social_account.id,
@@ -365,7 +372,12 @@ class TwitterService:
                     likes_count=tweet.public_metrics.get('like_count', 0) if tweet.public_metrics else 0,
                     retweets_count=tweet.public_metrics.get('retweet_count', 0) if tweet.public_metrics else 0,
                     replies_count=tweet.public_metrics.get('reply_count', 0) if tweet.public_metrics else 0,
-                    is_preprocessed=True
+                    is_preprocessed=True,
+                    # New fields
+                    emotion_scores=emotion_result["scores"],
+                    dominant_emotion=emotion_result["dominant"],
+                    sentiment_score=emotion_result["sentiment_score"],
+                    detected_slang=slang_result
                 )
                 
                 db.add(post)
@@ -466,6 +478,10 @@ class TwitterService:
                     # Preprocess content
                     preprocessed_text, language = text_preprocessor.preprocess(reply.text)
                     
+                    # Module 2 & 3: Analyze Emotion and Slang
+                    emotion_result = analyze_emotion(reply.text)
+                    slang_result = slang_detector.detect(reply.text)
+
                     # Get author username (you may need to fetch user details)
                     author_username = f"user_{reply.author_id}"
                     
@@ -480,7 +496,12 @@ class TwitterService:
                         language=language,
                         created_at_platform=reply.created_at,
                         likes_count=reply.public_metrics.get('like_count', 0) if reply.public_metrics else 0,
-                        is_preprocessed=True
+                        is_preprocessed=True,
+                        # New fields
+                        emotion_scores=emotion_result["scores"],
+                        dominant_emotion=emotion_result["dominant"],
+                        sentiment_score=emotion_result["sentiment_score"],
+                        detected_slang=slang_result
                     )
                     
                     db.add(comment)

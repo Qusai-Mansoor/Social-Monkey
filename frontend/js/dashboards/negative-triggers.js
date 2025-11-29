@@ -44,36 +44,65 @@ class NegativeTriggersBoard {
      * Load all necessary data
      */
     async loadData() {
-        const [emotionAnalysis, topPosts, engagementTrends] = await Promise.all([
-            window.api.getEmotionAnalysis(),
-            window.api.getTopPosts(50),
-            window.api.getEngagementTrends(this.filters.dateRange)
-        ]);
+        try {
+            // Fetch real negative triggers from API
+            const [negativeTriggers, topPosts] = await Promise.all([
+                window.api.request('/api/v1/analytics/dashboard/negative-triggers'),
+                window.api.getTopPosts(50)
+            ]);
 
-        return {
-            emotionAnalysis,
-            topPosts,
-            engagementTrends,
-            processedStats: this.processNegativeData({ emotionAnalysis, topPosts, engagementTrends })
-        };
+            // Format negative triggers for the dashboard
+            // The API returns { id, content, dominant_emotion, emotion_scores, created_at }
+            // We need to map this to the format expected by processNegativeData or use it directly
+            
+            // For now, let's merge the negative triggers into the topPosts array so processNegativeData can find them
+            // Or better, let's adjust processNegativeData to use the specific negative triggers list if available
+            
+            return {
+                emotionAnalysis: { emotions: { negative: negativeTriggers.length } }, // Dummy count for now
+                topPosts: topPosts,
+                negativeTriggers: negativeTriggers, // Pass the specific list
+                engagementTrends: [], // We can fetch this if needed
+                processedStats: this.processNegativeData({ 
+                    emotionAnalysis: { emotions: { negative: negativeTriggers.length } }, 
+                    topPosts, 
+                    negativeTriggers 
+                })
+            };
+        } catch (error) {
+            console.error('Error loading negative triggers data:', error);
+            return {
+                emotionAnalysis: {},
+                topPosts: [],
+                negativeTriggers: [],
+                engagementTrends: [],
+                processedStats: this.getDefaultStats()
+            };
+        }
     }
 
     /**
      * Process data to identify negative triggers
      */
     processNegativeData(data) {
-        const { emotionAnalysis, topPosts } = data;
+        const { topPosts, negativeTriggers } = data;
 
-        // Filter negative posts
-        const negativePosts = topPosts.filter(p => p.emotion === 'negative');
+        // Use the specific negative triggers list if available, otherwise filter topPosts
+        let negativePosts = negativeTriggers || [];
+        
+        if (negativePosts.length === 0 && topPosts) {
+             negativePosts = topPosts.filter(p => p.emotion === 'negative' || p.sentiment_label === 'negative');
+        }
         
         // Calculate severity based on engagement and emotion intensity
         const triggersWithSeverity = negativePosts.map(post => {
-            const engagement = post.engagement || 0;
+            // Calculate engagement if not present (negativeTriggers endpoint might not return it yet)
+            const engagement = post.engagement || (post.likes_count || 0) + (post.retweets_count || 0) + (post.replies_count || 0);
             const severity = engagement > 100 ? 'high' : engagement > 50 ? 'medium' : 'low';
             
             return {
                 ...post,
+                engagement,
                 severity,
                 triggerScore: this.calculateTriggerScore(post)
             };

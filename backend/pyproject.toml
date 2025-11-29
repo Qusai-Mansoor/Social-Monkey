@@ -25,6 +25,8 @@ dependencies = [
     "starlette-sessions<=0.3.0",
     "itsdangerous>=2.0.0",
     "email-validator>=2.0.0",
+    "transformers>=4.57.3",
+    "torch>=2.9.1",
 ]
 
 [build-system]

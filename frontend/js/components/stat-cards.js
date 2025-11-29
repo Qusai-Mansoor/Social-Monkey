@@ -22,28 +22,28 @@ class StatCards {
         const cards = [
             this.createCard(
                 'Total Posts',
-                this.formatNumber(statsData.posts || 5),
-                '+12% from last week',
-                'trending-up',
-                'positive'
+                this.formatNumber(statsData.posts || 0),
+                'Total analyzed',
+                'message-circle',
+                'neutral'
             ),
             this.createCard(
                 'Avg Engagement',
-                this.formatEngagement(statsData.engagement || 20),
-                '+8.2% from last week',
+                this.formatEngagement(statsData.engagement || 0),
+                'Per post',
                 'heart',
-                'positive'
+                'neutral'
             ),
             this.createCard(
                 'Sentiment Score',
-                this.formatPercent(statsData.sentiment || 50),
+                this.formatPercent(statsData.sentiment || 0),
                 this.getSentimentTrend(statsData.sentiment),
                 'smile',
                 this.getSentimentStatus(statsData.sentiment)
             ),
             this.createCard(
                 'Gen-Z Slang Usage',
-                this.formatPercent(statsData.slangUsage || 12),
+                this.formatPercent(statsData.slangUsage || 0),
                 this.getSlangTrend(statsData.slangUsage),
                 'message-circle',
                 this.getSlangStatus(statsData.slangUsage)
@@ -62,8 +62,24 @@ class StatCards {
      */
     createCard(title, value, trend, iconName, status) {
         const icon = this.getIcon(iconName);
-        const trendIcon = trend.includes('+') ? this.getIcon('arrow-up') : this.getIcon('arrow-down');
-        const trendClass = trend.includes('+') ? 'positive' : 'negative';
+        // Only show trend icon if trend text is not empty/generic
+        const showTrendIcon = trend && (trend.includes('+') || trend.includes('-') || trend.includes('Outlook') || trend.includes('Usage'));
+        
+        let trendIcon = '';
+        let trendClass = status || 'neutral';
+        
+        if (showTrendIcon) {
+            if (trend.includes('+') || trend.includes('Positive') || trend.includes('High')) {
+                trendIcon = this.getIcon('arrow-up');
+                trendClass = 'positive';
+            } else if (trend.includes('-') || trend.includes('Negative') || trend.includes('Low')) {
+                trendIcon = this.getIcon('arrow-down');
+                trendClass = 'negative';
+            } else {
+                trendIcon = ''; // No icon for neutral
+                trendClass = 'neutral';
+            }
+        }
 
         return `
             <div class="stat-card">
@@ -171,15 +187,17 @@ class StatCards {
      * Get sentiment trend text
      */
     getSentimentTrend(score) {
-        if (score >= 70) return '+5.3% from last week';
-        if (score >= 50) return '+2.1% from last week';
-        return '-1.2% from last week';
+        if (score === 0) return 'No data';
+        if (score >= 70) return 'Positive Outlook';
+        if (score >= 50) return 'Neutral Outlook';
+        return 'Negative Outlook';
     }
 
     /**
      * Get sentiment status class
      */
     getSentimentStatus(score) {
+        if (score === 0) return 'neutral';
         if (score >= 70) return 'positive';
         if (score >= 50) return 'neutral';
         return 'negative';
@@ -189,9 +207,10 @@ class StatCards {
      * Get slang usage trend
      */
     getSlangTrend(usage) {
-        if (usage >= 40) return '+15% from last week';
-        if (usage >= 25) return '+8% from last week';
-        return '+3% from last week';
+        if (usage === 0) return 'No usage detected';
+        if (usage >= 40) return 'High Usage';
+        if (usage >= 25) return 'Moderate Usage';
+        return 'Low Usage';
     }
 
     /**

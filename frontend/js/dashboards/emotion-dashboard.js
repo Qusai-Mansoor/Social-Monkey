@@ -55,16 +55,39 @@ class EmotionDashboard {
      * Load all necessary data
      */
     async loadData() {
-        // Use filtered data path to respect initial filter values
-        const data = await this.dataLoader.loadEmotionDashboardDataWithFilters(
-            this.filters.dateRange,
-            this.filters.platform
-        );
-        
-        return {
-            ...data,
-            processedStats: this.processEmotionData(data)
-        };
+        try {
+            // Fetch real data from API
+            const [emotionAnalysis, topPosts, engagementTrends] = await Promise.all([
+                window.api.request('/api/v1/analytics/emotion-analysis'),
+                window.api.getTopPosts(20),
+                window.api.request('/api/v1/analytics/engagement-trends?days=30')
+            ]);
+
+            const data = {
+                emotionAnalysis: emotionAnalysis,
+                topPosts: Array.isArray(topPosts) ? topPosts : [],
+                engagementTrends: engagementTrends
+            };
+
+            return {
+                ...data,
+                processedStats: this.processEmotionData(data)
+            };
+        } catch (error) {
+            console.error("Error loading emotion data:", error);
+            return {
+                emotionAnalysis: { emotions: { positive: 0, neutral: 0, negative: 0 }, total_analyzed: 0 },
+                topPosts: [],
+                processedStats: { 
+                    totalPosts: 0, 
+                    totalEngagement: 0, 
+                    avgEmotionScore: 0, 
+                    emotionBreakdown: { joy: 0, admiration: 0, neutral: 0, sarcasm: 0, anger: 0 }, 
+                    emotionPercentages: { joy: 0, admiration: 0, neutral: 0, sarcasm: 0, anger: 0 },
+                    postsByEmotion: { joy: [], admiration: [], neutral: [], sarcasm: [], anger: [] }
+                }
+            };
+        }
     }
 
     /**
@@ -88,14 +111,31 @@ class EmotionDashboard {
             ? ((emotions.positive / totalEmotions) * 100).toFixed(1)
             : 0;
 
-        // Process emotion breakdown by category
+        // Process emotion breakdown using REAL data from backend
+        const rawBreakdown = emotionAnalysis.breakdown || {};
+        
+        // Helper sets for categorization
+        const positiveSet = new Set(['joy', 'love', 'admiration', 'approval', 'caring', 'excitement', 'gratitude', 'optimism', 'pride', 'relief', 'desire']);
+        const negativeSet = new Set(['anger', 'annoyance', 'disappointment', 'disapproval', 'disgust', 'embarrassment', 'fear', 'grief', 'nervousness', 'remorse', 'sadness']);
+
+        // Map raw breakdown to our 5 visual categories
         const emotionBreakdown = {
-            joy: Math.floor(emotions.positive * 0.7),
-            admiration: Math.floor(emotions.positive * 0.3),
-            neutral: emotions.neutral,
-            sarcasm: Math.floor(emotions.negative * 0.6),
-            anger: Math.floor(emotions.negative * 0.4)
+            joy: 0,
+            admiration: 0,
+            neutral: 0,
+            sarcasm: 0,
+            anger: 0
         };
+
+        // Aggregate counts
+        Object.entries(rawBreakdown).forEach(([emotion, count]) => {
+            if (emotion === 'joy' || emotion === 'excitement' || emotion === 'optimism') emotionBreakdown.joy += count;
+            else if (positiveSet.has(emotion)) emotionBreakdown.admiration += count;
+            else if (emotion === 'neutral') emotionBreakdown.neutral += count;
+            else if (emotion === 'annoyance' || emotion === 'disapproval') emotionBreakdown.sarcasm += count; // Mapping these to sarcasm for visual variety
+            else if (negativeSet.has(emotion)) emotionBreakdown.anger += count;
+            else emotionBreakdown.neutral += count;
+        });
 
         // Calculate percentages
         const totalBreakdown = Object.values(emotionBreakdown).reduce((a, b) => a + b, 0);
@@ -106,13 +146,21 @@ class EmotionDashboard {
                 : 0;
         });
 
-        // Group posts by emotion
+        // Helper to categorize a post
+        const getPostCategory = (post) => {
+            const e = post.dominant_emotion;
+            if (positiveSet.has(e)) return 'positive';
+            if (negativeSet.has(e)) return 'negative';
+            return 'neutral';
+        };
+
+        // Group posts by emotion using the helper
         const postsByEmotion = {
-            joy: topPosts.filter(p => p.emotion === 'positive').slice(0, 3),
-            admiration: topPosts.filter(p => p.emotion === 'positive').slice(3, 6),
-            neutral: topPosts.filter(p => p.emotion === 'neutral'),
-            sarcasm: topPosts.filter(p => p.emotion === 'negative').slice(0, 3),
-            anger: topPosts.filter(p => p.emotion === 'negative').slice(3, 6)
+            joy: topPosts.filter(p => getPostCategory(p) === 'positive').slice(0, 3),
+            admiration: topPosts.filter(p => getPostCategory(p) === 'positive').slice(3, 6),
+            neutral: topPosts.filter(p => getPostCategory(p) === 'neutral').slice(0, 3),
+            sarcasm: topPosts.filter(p => getPostCategory(p) === 'negative').slice(0, 3),
+            anger: topPosts.filter(p => getPostCategory(p) === 'negative').slice(3, 6)
         };
 
         return {
@@ -123,9 +171,9 @@ class EmotionDashboard {
             emotionPercentages,
             postsByEmotion,
             changeMetrics: {
-                postsChange: '+12%',
-                engagementChange: '+8.5%',
-                scoreChange: '+5.3%'
+                postsChange: '+0%',
+                engagementChange: '+0%',
+                scoreChange: '+0%'
             }
         };
     }

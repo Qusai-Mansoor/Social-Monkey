@@ -38,141 +38,88 @@ class OverviewDashboard {
 
             // Initialize components
             this.initializeComponents();
+            
+            // Add Analysis Button Listener
+            this.setupAnalysisButton();
+
         } catch (error) {
             console.error('Error loading overview dashboard:', error);
             container.innerHTML = this.getErrorHTML(error.message);
         }
     }
 
+    setupAnalysisButton() {
+        // We'll inject the button into the header actions area if it exists
+        const headerActions = document.querySelector('.header-actions');
+        if (headerActions && !document.getElementById('analyze-btn')) {
+            const btn = document.createElement('button');
+            btn.id = 'analyze-btn';
+            btn.className = 'btn btn-primary';
+            btn.innerHTML = '<i class="fas fa-magic"></i> Run AI Analysis';
+            btn.onclick = async () => {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+                try {
+                    const result = await window.api.triggerAnalysis();
+                    alert(`Analysis Complete! Updated ${result.updated_count} posts.`);
+                    // Reload page to show new data
+                    window.location.reload();
+                } catch (e) {
+                    alert('Analysis failed: ' + e.message);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-magic"></i> Run AI Analysis';
+                }
+            };
+            headerActions.prepend(btn);
+        }
+    }
+
     /**
-     * Load all necessary data - SIMPLIFIED TO ONLY CALL getTopPosts()
+     * Load all necessary data
      */
     async loadData() {
         try {
-            // ONLY call getTopPosts - the working function
-            const topPosts = await window.api.getTopPosts(5);
+            // Fetch real overview data from the new endpoint
+            const [overviewData, topPosts, slangData] = await Promise.all([
+                window.api.request('/api/v1/analytics/overview'),
+                window.api.getTopPosts(5),
+                window.api.getSlangAnalysis()
+            ]);
             
-            console.log('Top posts loaded:', topPosts);
+            console.log('Overview data loaded:', overviewData);
 
-            // Process the posts data to create stats and emotion data
-            const processedData = this.processPostsData(topPosts);
-            
+            // Format stats for StatCards component
+            // StatCards expects: { posts, engagement, sentiment, slangUsage }
+            const stats = {
+                posts: overviewData.total_posts || 0,
+                engagement: overviewData.avg_engagement || 0,
+                sentiment: overviewData.avg_sentiment || 0,
+                slangUsage: overviewData.slang_usage_percent || 0
+            };
+
+            // Ensure slangData is clean
+            if (!slangData || !slangData.top_terms) {
+                slangData = { top_terms: [] };
+            }
+
             return {
                 topPosts: topPosts || [],
-                stats: processedData.stats,
-                emotionData: processedData.emotionData,
-                slangData: processedData.slangData,
-                processedStats: processedData // For backward compatibility
+                stats: stats,
+                emotionData: overviewData.emotion_distribution,
+                slangData: slangData, 
+                processedStats: overviewData
             };
             
         } catch (error) {
             console.error('Error loading overview data:', error);
             return {
                 topPosts: [],
-                stats: this.getDefaultStats(),
-                emotionData: { joy: 20, admiration: 15, neutral: 30, sarcasm: 25, anger: 10 },
-                slangData: { top_terms: [
-                    { term: 'slay', count: 15 },
-                    { term: 'no cap', count: 12 },
-                    { term: 'fr fr', count: 8 },
-                    { term: 'periodt', count: 6 },
-                    { term: 'vibe', count: 5 }
-                ]},
-                processedStats: {
-                    posts: 0,
-                    engagement: 0,
-                    sentiment: 0,
-                    slangUsage: 0,
-                    emotions: { joy: 20, admiration: 15, neutral: 30, sarcasm: 25, anger: 10 },
-                    slangTerms: { 'slay': 15, 'no cap': 12, 'fr fr': 8, 'periodt': 6, 'vibe': 5 }
-                }
+                stats: { posts: 0, engagement: 0, sentiment: 0, slangUsage: 0 },
+                emotionData: {},
+                slangData: { top_terms: [] },
+                processedStats: {}
             };
         }
-    }
-
-    /**
-     * Process posts data to generate stats and emotion data
-     */
-    processPostsData(posts) {
-        if (!posts || posts.length === 0) {
-            return {
-                stats: this.getDefaultStats(),
-                emotionData: { joy: 20, admiration: 15, neutral: 30, sarcasm: 25, anger: 10 },
-                slangData: { top_terms: [
-                    { term: 'slay', count: 15 },
-                    { term: 'no cap', count: 12 },
-                    { term: 'fr fr', count: 8 },
-                    { term: 'periodt', count: 6 },
-                    { term: 'vibe', count: 5 }
-                ]}
-            };
-        }
-
-        // Calculate real stats from posts
-        const totalPosts = posts.length;
-        const totalEngagement = posts.reduce((sum, post) => 
-            sum + (post.likes_count || 0) + (post.retweets_count || 0) + (post.replies_count || 0), 0
-        );
-        const avgEngagement = totalPosts > 0 ? Math.round(totalEngagement / totalPosts) : 0;
-
-        // Build emotion distribution from posts
-        const emotions = { joy: 0, admiration: 0, neutral: 0, sarcasm: 0, anger: 0 };
-        posts.forEach(post => {
-            const sentiment = post.sentiment_label?.toLowerCase() || 'neutral';
-            if (sentiment.includes('joy') || sentiment.includes('positive')) emotions.joy++;
-            else if (sentiment.includes('admiration')) emotions.admiration++;
-            else if (sentiment.includes('sarcasm')) emotions.sarcasm++;
-            else if (sentiment.includes('anger') || sentiment.includes('negative')) emotions.anger++;
-            else emotions.neutral++;
-        });
-
-        // Calculate stats for cards
-        const stats = [
-            {
-                label: 'Total Posts',
-                value: totalPosts.toString(),
-                change: '+12%',
-                changeType: 'positive',
-                icon: 'message-square',
-                description: 'Last 7 days'
-            },
-            {
-                label: 'Total Engagement',
-                value: this.formatNumber(totalEngagement),
-                change: '+28%',
-                changeType: 'positive',
-                icon: 'heart',
-                description: 'Likes, comments & shares'
-            },
-            {
-                label: 'Avg Engagement',
-                value: this.formatNumber(avgEngagement),
-                change: '+15%',
-                changeType: 'positive',
-                icon: 'trending-up',
-                description: 'Per post'
-            },
-            {
-                label: 'Sentiment Score',
-                value: '76%',
-                change: '+5 pts',
-                changeType: 'positive',
-                icon: 'smile',
-                description: 'Overall positivity'
-            }
-        ];
-
-        return {
-            stats: stats,
-            emotionData: emotions,
-            slangData: { top_terms: [
-                { term: 'slay', count: 15 },
-                { term: 'no cap', count: 12 },
-                { term: 'fr fr', count: 8 },
-                { term: 'periodt', count: 6 },
-                { term: 'vibe', count: 5 }
-            ]}
-        };
     }
 
     /**
@@ -192,12 +139,23 @@ class OverviewDashboard {
         }
 
         // Initialize slang chart
-        if (this.data && this.data.slangData && this.data.slangData.top_terms) {
+        if (this.data && this.data.slangData && this.data.slangData.top_terms && this.data.slangData.top_terms.length > 0) {
             const slangTermsData = {};
             this.data.slangData.top_terms.forEach(term => {
                 slangTermsData[term.term] = term.count;
             });
             this.chartManager.createSlangChart('slangChart', slangTermsData);
+        } else {
+            // Show empty state for slang chart
+            const chartContainer = document.getElementById('slangChart')?.parentElement;
+            if (chartContainer) {
+                chartContainer.innerHTML = `
+                    <div class="empty-chart-state">
+                        <div class="empty-icon">💬</div>
+                        <p>No slang terms detected yet</p>
+                    </div>
+                `;
+            }
         }
 
         // Attach event listeners
@@ -255,10 +213,12 @@ class OverviewDashboard {
                     <h1>Dashboard Overview</h1>
                     <p class="subtitle">Track your social media performance</p>
                 </div>
-                <button id="refresh-dashboard" class="btn-primary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                    Refresh
-                </button>
+                <div class="header-actions">
+                    <button id="refresh-dashboard" class="btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        Refresh
+                    </button>
+                </div>
             </div>
 
             <!-- Stats Grid -->
@@ -308,91 +268,6 @@ class OverviewDashboard {
                 <div class="actions-grid">
                     ${this.getQuickActions()}
                 </div>
-            </div>
-        `;
-    }
-
-    /**
-     * Get top performing posts HTML - OLD METHOD - COMMENT OUT
-     */
-    /*
-    getTopPosts(limit = 5) {
-        // Check for posts in topPosts property (from API) or posts property
-        const posts = this.data?.topPosts || this.data?.posts || [];
-        
-        if (!posts || posts.length === 0) {
-            return `
-                <div class="no-posts-message">
-                    <div class="no-posts-icon">📝</div>
-                    <h3>No posts yet</h3>
-                    <p>Connect your social accounts and sync data to see your top performing posts here.</p>
-                </div>
-            `;
-        }
-
-        const sortedPosts = [...posts]
-            .sort((a, b) => {
-                // Use likes_count, retweets_count, replies_count (from backend) or likes, retweets, replies
-                const engagementA = (a.likes_count || a.likes || 0) + (a.retweets_count || a.retweets || 0) + (a.replies_count || a.replies || 0);
-                const engagementB = (b.likes_count || b.likes || 0) + (b.retweets_count || b.retweets || 0) + (b.replies_count || b.replies || 0);
-                return engagementB - engagementA;
-            })
-            .slice(0, limit);
-
-        return sortedPosts.map(post => this.getPostCard(post)).join('');
-    }
-    */
-
-    /**
-     * Get individual post card HTML
-     */
-    getPostCard(post) {
-        // Handle both API formats: likes_count or likes, etc.
-        const likes = post.likes_count || post.likes || 0;
-        const retweets = post.retweets_count || post.retweets || 0;
-        const replies = post.replies_count || post.replies || 0;
-        const engagement = likes + retweets + replies;
-        
-        const emotionClass = this.getEmotionClass(post.sentiment_label);
-        const emotionPercent = Math.round((post.sentiment_score || 0) * 100);
-        
-        // Handle different date formats
-        const dateStr = post.created_at_platform || post.created_at || new Date().toISOString();
-
-        return `
-            <div class="post-card" data-post-id="${post.id}">
-                <div class="post-header">
-                    <div class="platform-badge ${(post.platform || '').toLowerCase()}">
-                        ${post.platform || 'Unknown'}
-                    </div>
-                    <span class="post-date">${this.formatDate(dateStr)}</span>
-                </div>
-                
-                <div class="post-content">
-                    <p>${this.escapeHtml(post.content || post.text || 'No content')}</p>
-                </div>
-                
-                <div class="post-stats">
-                    <div class="stat-item">
-                        <span class="stat-icon">❤️</span>
-                        <span class="stat-value">${this.formatNumber(likes)}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-icon">🔄</span>
-                        <span class="stat-value">${this.formatNumber(retweets)}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-icon">💬</span>
-                        <span class="stat-value">${this.formatNumber(replies)}</span>
-                    </div>
-                </div>
-                
-                ${post.sentiment_label ? `
-                    <div class="post-emotion">
-                        <span class="emotion-label ${emotionClass}">${post.sentiment_label}</span>
-                        <span class="emotion-score">${emotionPercent}%</span>
-                    </div>
-                ` : ''}
             </div>
         `;
     }
@@ -514,12 +389,12 @@ class OverviewDashboard {
      * Get default stats for error/empty states
      */
     getDefaultStats() {
-        return [
-            { label: 'Total Posts', value: '0', change: '+0%', changeType: 'neutral', icon: 'trending-up' },
-            { label: 'Total Engagement', value: '0', change: '+0%', changeType: 'neutral', icon: 'heart' },
-            { label: 'Avg Emotion Score', value: '0', change: '+0 pts', changeType: 'neutral', icon: 'smile' },
-            { label: 'Flagged Posts', value: '0', change: 'No issues', changeType: 'positive', icon: 'alert-triangle' }
-        ];
+        return {
+            posts: 0,
+            engagement: 0,
+            sentiment: 0,
+            slangUsage: 0
+        };
     }
 
     /**
@@ -539,11 +414,15 @@ class OverviewDashboard {
             `;
         }
 
-        return this.data.topPosts.map(post => `
+        return this.data.topPosts.map(post => {
+            const emotion = post.emotion || post.sentiment_label || 'neutral';
+            const emotionClass = this.getEmotionClass(emotion);
+            
+            return `
             <div class="post-card">
                 <div class="post-header">
-                    <div class="platform-badge twitter">
-                        Twitter
+                    <div class="platform-badge ${(post.platform || 'twitter').toLowerCase()}">
+                        ${post.platform || 'Twitter'}
                     </div>
                     <span class="post-date">${this.formatDate(post.created_at_platform || post.created_at)}</span>
                 </div>
@@ -568,10 +447,11 @@ class OverviewDashboard {
                 </div>
                 
                 <div class="post-emotion">
-                    <span class="emotion-label">Neutral</span>
+                    <span class="emotion-label ${emotionClass}">${emotion}</span>
                 </div>
             </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     /**

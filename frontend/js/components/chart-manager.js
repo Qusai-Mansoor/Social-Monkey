@@ -20,20 +20,36 @@ class ChartManager {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return null;
 
-        const { positive = 0, neutral = 0, negative = 0 } = data;
+        // Use real emotion breakdown if available, otherwise fallback to positive/neutral/negative
+        let chartData = [];
+        
+        if (data.joy !== undefined || data.admiration !== undefined || data.sarcasm !== undefined || data.anger !== undefined) {
+            // We have detailed breakdown
+            chartData = [
+                data.joy || 0,
+                data.admiration || 0,
+                data.neutral || 0,
+                data.sarcasm || 0,
+                data.anger || 0
+            ];
+        } else {
+            // Fallback to basic sentiment
+            const { positive = 0, neutral = 0, negative = 0 } = data;
+            chartData = [
+                Math.floor(positive * 0.7),  // Joy
+                Math.floor(positive * 0.3),  // Admiration  
+                neutral,                      // Neutral
+                Math.floor(negative * 0.6),  // Sarcasm
+                Math.floor(negative * 0.4)   // Anger
+            ];
+        }
 
         this.charts[canvasId] = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: ['Joy', 'Admiration', 'Neutral', 'Sarcasm', 'Anger'],
                 datasets: [{
-                    data: [
-                        Math.floor(positive * 0.7),  // Joy
-                        Math.floor(positive * 0.3),  // Admiration  
-                        neutral,                      // Neutral
-                        Math.floor(negative * 0.6),  // Sarcasm
-                        Math.floor(negative * 0.4)   // Anger
-                    ],
+                    data: chartData,
                     backgroundColor: [
                         '#DA6CFF',  // Joy - Magenta
                         '#7C3AED',  // Admiration - Purple

@@ -41,18 +41,27 @@ class GenZInsights {
     }
 
     /**
-     * Load all necessary data - SIMPLIFIED TO ONLY USE getTopPosts()
+     * Load all necessary data
      */
     async loadData() {
         try {
-            // ONLY call getTopPosts - the working function
-            const posts = await window.api.getTopPosts(20); // Get more posts for analysis
+            // Fetch real slang insights from API
+            const [slangInsights, posts] = await Promise.all([
+                window.api.request('/api/v1/analytics/dashboard/slang-insights'),
+                window.api.getTopPosts(50)
+            ]);
             
-            console.log('Posts loaded for Gen-Z analysis:', posts);
+            console.log('Slang insights loaded:', slangInsights);
 
-            // Create placeholder slang data
+            // Format slang data for the dashboard
             const slangData = {
-                popular_terms: this.getDefaultSlangTerms()
+                popular_terms: slangInsights.map(item => ({
+                    term: item.term,
+                    count: item.count,
+                    definition: item.meaning,
+                    sentiment: 'neutral', // You could add sentiment to the API response
+                    trend: 'stable' // You could add trend to the API response
+                }))
             };
 
             return {
@@ -64,7 +73,7 @@ class GenZInsights {
             console.error('Error loading Gen-Z insights data:', error);
             return {
                 posts: [],
-                slangData: { popular_terms: this.getDefaultSlangTerms() },
+                slangData: { popular_terms: [] },
                 processedStats: this.getDefaultProcessedStats()
             };
         }
