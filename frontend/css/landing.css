@@ -326,7 +326,7 @@ h1, h2, h3, h4 {
     position: relative;
     border-radius: var(--spacing-md);
     overflow: hidden;
-    height: 420px;
+    height: 450px;
 }
 
 .hero-image img {
@@ -453,7 +453,7 @@ h1, h2, h3, h4 {
 .section-image {
     border-radius: var(--spacing-md);
     overflow: hidden;
-    height: 320px;
+    height: 350px;
 }
 
 .section-image img {
