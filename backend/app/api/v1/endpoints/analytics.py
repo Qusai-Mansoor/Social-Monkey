@@ -7,7 +7,7 @@ import re
 
 from app.core.security import get_current_user
 from app.db.session import get_db
-from app.models.models import User, SocialAccount, Post
+from app.models.models import User, SocialAccount, Post, Comment
 
 router = APIRouter()
 
@@ -879,19 +879,19 @@ def get_negative_triggers(
     # Get user's social accounts
     account_ids = db.query(SocialAccount.id).filter(SocialAccount.user_id == current_user.id).all()
     account_ids = [id[0] for id in account_ids]
-    
+
     if not account_ids:
         return []
 
     negative_emotions = ['anger', 'sadness', 'disgust', 'disappointment', 'annoyance']
-    
+
     posts = db.query(Post)\
         .filter(Post.social_account_id.in_(account_ids))\
         .filter(Post.dominant_emotion.in_(negative_emotions))\
         .order_by(desc(Post.created_at))\
         .limit(20)\
         .all()
-        
+
     return [
         {
             "id": post.id,
@@ -902,3 +902,82 @@ def get_negative_triggers(
         }
         for post in posts
     ]
+
+@router.get("/post-comments/{post_id}")
+def get_post_comments(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all comments for a specific post with emotion analysis
+    """
+    try:
+        # Get user's social accounts
+        account_ids = db.query(SocialAccount.id).filter(
+            SocialAccount.user_id == current_user.id
+        ).all()
+        account_ids = [id[0] for id in account_ids]
+
+        if not account_ids:
+            return {
+                "post": None,
+                "comments": [],
+                "total_comments": 0,
+                "error": "No social accounts found"
+            }
+
+        # Verify the post belongs to the user
+        post = db.query(Post).filter(
+            Post.id == post_id,
+            Post.social_account_id.in_(account_ids)
+        ).first()
+
+        if not post:
+            raise HTTPException(status_code=404, detail="Post not found")
+
+        # Get all comments for this post
+        comments = db.query(Comment).filter(
+            Comment.post_id == post_id
+        ).order_by(Comment.created_at_platform.desc()).all()
+
+        # Format post data
+        post_data = {
+            "id": post.id,
+            "content": post.content,
+            "platform": post.social_account.platform if post.social_account else "twitter",
+            "created_at_platform": post.created_at_platform.isoformat() if post.created_at_platform else None,
+            "likes_count": post.likes_count or 0,
+            "retweets_count": post.retweets_count or 0,
+            "replies_count": post.replies_count or 0,
+            "dominant_emotion": post.dominant_emotion,
+            "emotion_scores": post.emotion_scores,
+            "sentiment_score": post.sentiment_score
+        }
+
+        # Format comments data
+        comments_data = []
+        for comment in comments:
+            comments_data.append({
+                "id": comment.id,
+                "author_username": comment.author_username,
+                "content": comment.content,
+                "created_at_platform": comment.created_at_platform.isoformat() if comment.created_at_platform else None,
+                "likes_count": comment.likes_count or 0,
+                "dominant_emotion": comment.dominant_emotion,
+                "emotion_scores": comment.emotion_scores,
+                "sentiment_score": comment.sentiment_score,
+                "detected_slang": comment.detected_slang
+            })
+
+        return {
+            "post": post_data,
+            "comments": comments_data,
+            "total_comments": len(comments_data)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting post comments: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving comments: {str(e)}")
