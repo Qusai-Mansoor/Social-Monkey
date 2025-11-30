@@ -506,6 +506,59 @@
     gap: 16px;
 }
 
+.emotion-breakdown-primary {
+    display: grid;
+    gap: 16px;
+}
+
+.emotion-breakdown-secondary {
+    display: grid;
+    gap: 16px;
+    margin-top: 16px;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.emotion-breakdown-toggle {
+    margin-top: 16px;
+    text-align: center;
+}
+
+.emotion-breakdown-toggle .btn-text {
+    background: rgba(124, 58, 237, 0.1);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    color: var(--accent-purple);
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.emotion-breakdown-toggle .btn-text:hover {
+    background: rgba(124, 58, 237, 0.2);
+    border-color: rgba(124, 58, 237, 0.5);
+    transform: translateY(-2px);
+}
+
+.emotion-breakdown-toggle .toggle-icon {
+    transition: transform 0.3s ease;
+}
+
 .emotion-bar-item {
     background: var(--bg-panel);
     border: 1px solid rgba(124, 58, 237, 0.2);
@@ -531,6 +584,24 @@
     font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.emotion-bar-item .emotion-icon {
+    font-size: 20px;
+}
+
+.emotion-bar-item .emotion-label {
+    font-weight: 600;
+}
+
+.emotion-bar-item .emotion-count {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 4px;
 }
 
 .emotion-bar-item .emotion-percentage {
@@ -576,10 +647,26 @@
     100% { transform: translateX(100%); }
 }
 
-/* Emotion-specific colors */
-.emotion-joy .emotion-bar-fill { background: linear-gradient(90deg, #DA6CFF, #FF1CF7); }
-.emotion-admiration .emotion-bar-fill { background: linear-gradient(90deg, #7C3AED, #A78BFA); }
-.emotion-neutral .emotion-bar-fill { background: linear-gradient(90deg, #6B7280, #9CA3AF); }
+/* Emotion-specific colors by category */
+.emotion-positive .emotion-bar-fill {
+    background: linear-gradient(90deg, #10B981, #34D399);
+}
+
+.emotion-negative .emotion-bar-fill {
+    background: linear-gradient(90deg, #EF4444, #F87171);
+}
+
+.emotion-neutral .emotion-bar-fill {
+    background: linear-gradient(90deg, #6B7280, #9CA3AF);
+}
+
+.emotion-surprise .emotion-bar-fill {
+    background: linear-gradient(90deg, #F59E0B, #FBBF24);
+}
+
+/* Legacy emotion-specific colors (backward compatibility) */
+.emotion-joy .emotion-bar-fill { background: linear-gradient(90deg, #10B981, #34D399); }
+.emotion-admiration .emotion-bar-fill { background: linear-gradient(90deg, #8B5CF6, #A78BFA); }
 .emotion-sarcasm .emotion-bar-fill { background: linear-gradient(90deg, #10B981, #34D399); }
 .emotion-anger .emotion-bar-fill { background: linear-gradient(90deg, #EF4444, #F87171); }
 

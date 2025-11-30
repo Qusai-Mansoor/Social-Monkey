@@ -1,0 +1,64 @@
+%% Class Diagram for Social-Monkey (Object Model)
+%% Description: Shows main entities, attributes and relationships derived from `app/models/models.py`.
+
+classDiagram
+    class User {
+        +int id
+        +string email
+        +string username
+        +string hashed_password
+        +bool is_active
+        +datetime created_at
+    }
+    class SocialAccount {
+        +int id
+        +int user_id
+        +string platform
+        +string platform_user_id
+        +string platform_username
+        +string access_token (encrypted)
+        +string refresh_token (encrypted)
+        +datetime token_expires_at
+        +bool is_active
+    }
+    class Post {
+        +int id
+        +int social_account_id
+        +string platform_post_id
+        +text content
+        +json raw_data
+        +text preprocessed_content
+        +string language
+        +int likes_count
+        +int retweets_count
+        +int replies_count
+        +bool is_preprocessed
+        +datetime created_at
+    }
+    class Comment {
+        +int id
+        +int post_id
+        +string platform_comment_id
+        +string author_username
+        +text content
+        +json raw_data
+        +text preprocessed_content
+        +string language
+        +int likes_count
+        +bool is_preprocessed
+    }
+    class OAuthState {
+        +string state
+        +string code_verifier
+        +datetime created_at
+    }
+
+    %% Relationships
+    User "1" o-- "*" SocialAccount : owns
+    SocialAccount "1" o-- "*" Post : has
+    Post "1" o-- "*" Comment : has
+
+    %% Notes
+    note for User "Passwords hashed with bcrypt (security.py)"
+    note for SocialAccount "Tokens encrypted via Fernet (utils/encryption.py)"
+

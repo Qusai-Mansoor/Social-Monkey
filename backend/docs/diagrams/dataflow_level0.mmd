@@ -1,0 +1,16 @@
+%% Data Flow Diagram - Level 0 (Context)
+%% Actors: User, Social-Monkey System, External Platforms
+
+flowchart LR
+    User[User]
+    System[Social-Monkey System]
+    Twitter[Twitter API]
+    Instagram[Instagram API]
+
+    User -->|connects / interacts| System
+    System -->|reads / writes| DB[(Database)]
+    System -->|fetches posts/comments| Twitter
+    System -->|(future) fetches posts| Instagram
+
+    click System "../main.py" "Open backend entrypoint"
+

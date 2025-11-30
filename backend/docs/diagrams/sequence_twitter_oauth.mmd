@@ -1,0 +1,28 @@
+%% Sequence Diagram - Twitter OAuth (class-level)
+%% Participants: User, Frontend, Backend(API), Twitter, DB
+
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API as Backend
+    participant TwitterAPI as Twitter
+    participant DB
+
+    User->>Frontend: Click "Connect Twitter"
+    Frontend->>API: GET /api/v1/oauth/twitter/authorize (with auth)
+    API->>DB: INSERT OAuthState(state, code_verifier)
+    API-->>Frontend: {authorization_url}
+    Frontend-->>User: Redirect to Twitter (authorization_url)
+    User->>TwitterAPI: Grant Permissions
+    TwitterAPI-->>User: Redirect to Backend callback (code, state)
+    User->>Frontend: Browser calls /api/v1/oauth/twitter/callback?code=...&state=...
+    Frontend->>API: GET /oauth/twitter/callback?code&state (with auth)
+    API->>DB: SELECT OAuthState WHERE state=...
+    API->>TwitterAPI: POST /2/oauth2/token (code + code_verifier)
+    TwitterAPI-->>API: {access_token, refresh_token, ...}
+    API->>API: Encrypt tokens (Fernet)
+    API->>DB: INSERT/UPDATE SocialAccount with encrypted tokens
+    API->>DB: DELETE OAuthState
+    API-->>Frontend: 200 OK (connected)
+    Frontend-->>User: Show success
+

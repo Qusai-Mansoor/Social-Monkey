@@ -1,0 +1,17 @@
+%% Activity Diagram - Data Ingestion (Twitter)
+%% Description: Ingest posts and comments for a connected SocialAccount
+
+flowchart TB
+    U[Authenticated User triggers ingest] --> BE[Backend /api/v1/data/ingest/{account_id}]
+    BE --> S[Verify SocialAccount belongs to user]
+    S --> T{platform == "twitter"}
+    T -- yes --> TS[TwitterService.fetch_user_tweets]
+    TS --> DB1[Store Post rows in DB]
+    DB1 --> ForEachPost[For each new post]
+    ForEachPost --> TR[TwitterService.fetch_tweet_replies]
+    TR --> DB2[Store Comment rows in DB]
+    DB2 --> Preproc[TextPreprocessor.preprocess]
+    Preproc --> UpdatePost[Mark is_preprocessed=True]
+    UpdatePost --> Finish[Return ingestion statistics]
+    T -- no --> Unsupported[Return 501 - platform not supported]
+

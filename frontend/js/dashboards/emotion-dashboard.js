@@ -100,68 +100,43 @@ class EmotionDashboard {
         const totalPosts = emotionAnalysis.total_analyzed || 0;
 
         // Calculate total engagement
-        const totalEngagement = topPosts.reduce((sum, post) => 
+        const totalEngagement = topPosts.reduce((sum, post) =>
             sum + (post.engagement || 0), 0
         );
 
-        // Calculate average emotion score
-        const emotions = emotionAnalysis.emotions || { positive: 0, neutral: 0, negative: 0 };
-        const totalEmotions = emotions.positive + emotions.neutral + emotions.negative;
-        const avgEmotionScore = totalEmotions > 0 
-            ? ((emotions.positive / totalEmotions) * 100).toFixed(1)
-            : 0;
+        // Use the REAL average sentiment score from backend
+        const avgEmotionScore = emotionAnalysis.avg_sentiment_score || 0;
 
-        // Process emotion breakdown using REAL data from backend
+        // Process emotion breakdown using REAL data from backend (all 28 emotions)
         const rawBreakdown = emotionAnalysis.breakdown || {};
-        
-        // Helper sets for categorization
-        const positiveSet = new Set(['joy', 'love', 'admiration', 'approval', 'caring', 'excitement', 'gratitude', 'optimism', 'pride', 'relief', 'desire']);
-        const negativeSet = new Set(['anger', 'annoyance', 'disappointment', 'disapproval', 'disgust', 'embarrassment', 'fear', 'grief', 'nervousness', 'remorse', 'sadness']);
 
-        // Map raw breakdown to our 5 visual categories
-        const emotionBreakdown = {
-            joy: 0,
-            admiration: 0,
-            neutral: 0,
-            sarcasm: 0,
-            anger: 0
-        };
+        // Sort emotions by count (descending)
+        const sortedEmotions = Object.entries(rawBreakdown)
+            .sort((a, b) => b[1] - a[1]);
 
-        // Aggregate counts
-        Object.entries(rawBreakdown).forEach(([emotion, count]) => {
-            if (emotion === 'joy' || emotion === 'excitement' || emotion === 'optimism') emotionBreakdown.joy += count;
-            else if (positiveSet.has(emotion)) emotionBreakdown.admiration += count;
-            else if (emotion === 'neutral') emotionBreakdown.neutral += count;
-            else if (emotion === 'annoyance' || emotion === 'disapproval') emotionBreakdown.sarcasm += count; // Mapping these to sarcasm for visual variety
-            else if (negativeSet.has(emotion)) emotionBreakdown.anger += count;
-            else emotionBreakdown.neutral += count;
-        });
+        // Calculate total for percentages
+        const totalBreakdown = Object.values(rawBreakdown).reduce((a, b) => a + b, 0);
 
-        // Calculate percentages
-        const totalBreakdown = Object.values(emotionBreakdown).reduce((a, b) => a + b, 0);
+        // Build emotion breakdown with all emotions and their percentages
+        const emotionBreakdown = {};
         const emotionPercentages = {};
-        Object.keys(emotionBreakdown).forEach(key => {
-            emotionPercentages[key] = totalBreakdown > 0 
-                ? ((emotionBreakdown[key] / totalBreakdown) * 100).toFixed(1)
+
+        sortedEmotions.forEach(([emotion, count]) => {
+            emotionBreakdown[emotion] = count;
+            emotionPercentages[emotion] = totalBreakdown > 0
+                ? parseFloat(((count / totalBreakdown) * 100).toFixed(1))
                 : 0;
         });
 
-        // Helper to categorize a post
-        const getPostCategory = (post) => {
-            const e = post.dominant_emotion;
-            if (positiveSet.has(e)) return 'positive';
-            if (negativeSet.has(e)) return 'negative';
-            return 'neutral';
-        };
-
-        // Group posts by emotion using the helper
-        const postsByEmotion = {
-            joy: topPosts.filter(p => getPostCategory(p) === 'positive').slice(0, 3),
-            admiration: topPosts.filter(p => getPostCategory(p) === 'positive').slice(3, 6),
-            neutral: topPosts.filter(p => getPostCategory(p) === 'neutral').slice(0, 3),
-            sarcasm: topPosts.filter(p => getPostCategory(p) === 'negative').slice(0, 3),
-            anger: topPosts.filter(p => getPostCategory(p) === 'negative').slice(3, 6)
-        };
+        // Group posts by their actual dominant_emotion
+        const postsByEmotion = {};
+        topPosts.forEach(post => {
+            const emotion = post.emotion || post.dominant_emotion || 'neutral';
+            if (!postsByEmotion[emotion]) {
+                postsByEmotion[emotion] = [];
+            }
+            postsByEmotion[emotion].push(post);
+        });
 
         return {
             totalPosts,
@@ -170,6 +145,7 @@ class EmotionDashboard {
             emotionBreakdown,
             emotionPercentages,
             postsByEmotion,
+            rawBreakdown,
             changeMetrics: {
                 postsChange: '+0%',
                 engagementChange: '+0%',
@@ -214,29 +190,38 @@ class EmotionDashboard {
      * Render emotion trends chart
      */
     renderEmotionTrendsChart() {
-        const trendData = this.data.engagementTrends;
-        const emotions = this.data.emotionAnalysis?.emotions || { positive: 0, neutral: 0, negative: 0 };
-        
-        // Build deterministic emotion series from engagement trends
-        // Derive per-emotion trends based on emotion distribution ratios
-        const totalEmotions = emotions.positive + emotions.neutral + emotions.negative;
-        const joyRatio = totalEmotions > 0 ? (emotions.positive * 0.7) / totalEmotions : 0.28;
-        const admirationRatio = totalEmotions > 0 ? (emotions.positive * 0.3) / totalEmotions : 0.12;
-        const neutralRatio = totalEmotions > 0 ? emotions.neutral / totalEmotions : 0.40;
-        const sarcasmRatio = totalEmotions > 0 ? (emotions.negative * 0.6) / totalEmotions : 0.12;
-        const angerRatio = totalEmotions > 0 ? (emotions.negative * 0.4) / totalEmotions : 0.08;
-        
-        // Transform data for multi-line chart with deterministic splits
-        const chartData = {
-            labels: trendData.dates || [],
-            joy: (trendData.engagements || []).map(v => Math.round(v * joyRatio)),
-            admiration: (trendData.engagements || []).map(v => Math.round(v * admirationRatio)),
-            neutral: (trendData.engagements || []).map(v => Math.round(v * neutralRatio)),
-            sarcasm: (trendData.engagements || []).map(v => Math.round(v * sarcasmRatio)),
-            anger: (trendData.engagements || []).map(v => Math.round(v * angerRatio))
-        };
+        const emotionTrends = this.data.emotionAnalysis?.emotion_trends || { dates: [], emotions: {} };
 
-        this.chartManager.createEmotionTrendChart('emotionTrendsChart', chartData);
+        // If we have real emotion trend data, use it
+        if (emotionTrends.dates && emotionTrends.dates.length > 0) {
+            // Get top 5-8 emotions to display (avoid cluttering the chart)
+            const emotionEntries = Object.entries(emotionTrends.emotions)
+                .map(([emotion, counts]) => ({
+                    emotion,
+                    total: counts.reduce((a, b) => a + b, 0)
+                }))
+                .sort((a, b) => b.total - a.total)
+                .slice(0, 8); // Show top 8 emotions
+
+            // Build chart data for top emotions
+            const chartData = {
+                labels: emotionTrends.dates,
+                emotions: {}
+            };
+
+            emotionEntries.forEach(({ emotion }) => {
+                chartData.emotions[emotion] = emotionTrends.emotions[emotion];
+            });
+
+            this.chartManager.createEmotionTrendChart('emotionTrendsChart', chartData);
+        } else {
+            // Fallback to empty state
+            const chartData = {
+                labels: [],
+                emotions: {}
+            };
+            this.chartManager.createEmotionTrendChart('emotionTrendsChart', chartData);
+        }
     }
 
     /**
@@ -278,6 +263,13 @@ class EmotionDashboard {
             refreshBtn.addEventListener('click', this.boundHandlers.refresh);
         }
 
+        // Toggle more emotions button
+        const toggleBtn = document.getElementById('toggleMoreEmotions');
+        if (toggleBtn) {
+            this.boundHandlers.toggleEmotions = () => this.toggleSecondaryEmotions();
+            toggleBtn.addEventListener('click', this.boundHandlers.toggleEmotions);
+        }
+
         // Post row clicks - use event delegation on container
         const tableContainer = document.querySelector('.posts-table-container');
         if (tableContainer) {
@@ -289,6 +281,29 @@ class EmotionDashboard {
                 }
             };
             tableContainer.addEventListener('click', this.boundHandlers.tableClick);
+        }
+    }
+
+    /**
+     * Toggle secondary emotions visibility
+     */
+    toggleSecondaryEmotions() {
+        const secondaryContainer = document.getElementById('secondaryEmotions');
+        const toggleBtn = document.getElementById('toggleMoreEmotions');
+
+        if (secondaryContainer && toggleBtn) {
+            const isHidden = secondaryContainer.style.display === 'none';
+            secondaryContainer.style.display = isHidden ? 'block' : 'none';
+
+            const icon = toggleBtn.querySelector('.toggle-icon');
+            if (icon) {
+                icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+            }
+
+            const emotionCount = secondaryContainer.querySelectorAll('.emotion-bar-item').length;
+            toggleBtn.innerHTML = isHidden
+                ? `Hide ${emotionCount} emotions <svg class="toggle-icon" style="transform: rotate(180deg);" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>`
+                : `Show ${emotionCount} more emotions <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
         }
     }
 
@@ -569,7 +584,7 @@ class EmotionDashboard {
     }
 
     /**
-     * Get emotion breakdown HTML
+     * Get emotion breakdown HTML - Display all 28 emotions with smart grouping
      */
     getEmotionBreakdownHTML() {
         if (!this.data || !this.data.processedStats) {
@@ -578,27 +593,139 @@ class EmotionDashboard {
 
         const { emotionBreakdown, emotionPercentages } = this.data.processedStats;
 
-        const emotions = [
-            { name: 'Joy', key: 'joy', color: '#DA6CFF', icon: '😊' },
-            { name: 'Admiration', key: 'admiration', color: '#7C3AED', icon: '🤩' },
-            { name: 'Neutral', key: 'neutral', color: '#6B7280', icon: '😐' },
-            { name: 'Sarcasm', key: 'sarcasm', color: '#10B981', icon: '😏' },
-            { name: 'Anger', key: 'anger', color: '#EF4444', icon: '😠' }
-        ];
+        // Emotion metadata with icons and colors
+        const emotionMetadata = this.getEmotionMetadata();
 
-        return emotions.map(emotion => `
-            <div class="emotion-bar-item emotion-${emotion.key}">
-                <div class="emotion-header">
-                    <span class="emotion-name">${emotion.icon} ${emotion.name}</span>
-                    <span class="emotion-percentage">${emotionPercentages[emotion.key]}%</span>
-                </div>
-                <div class="emotion-bar-container">
-                    <div class="emotion-bar-fill" 
-                         style="width: ${emotionPercentages[emotion.key]}%;">
+        // Get sorted emotions (already sorted by count in processEmotionData)
+        const sortedEmotions = Object.keys(emotionBreakdown);
+
+        if (sortedEmotions.length === 0) {
+            return '<p class="no-data">No emotion data available</p>';
+        }
+
+        // Split into primary (top 10) and secondary (rest)
+        const primaryEmotions = sortedEmotions.slice(0, 10);
+        const secondaryEmotions = sortedEmotions.slice(10);
+
+        let html = '<div class="emotion-breakdown-primary">';
+
+        // Render primary emotions (always visible)
+        primaryEmotions.forEach(emotionKey => {
+            const metadata = emotionMetadata[emotionKey] || { icon: '😐', color: '#6B7280', category: 'neutral' };
+            const count = emotionBreakdown[emotionKey];
+            const percentage = emotionPercentages[emotionKey];
+
+            html += `
+                <div class="emotion-bar-item emotion-${metadata.category}">
+                    <div class="emotion-header">
+                        <span class="emotion-name">
+                            <span class="emotion-icon">${metadata.icon}</span>
+                            <span class="emotion-label">${this.capitalizeEmotion(emotionKey)}</span>
+                            <span class="emotion-count">(${count})</span>
+                        </span>
+                        <span class="emotion-percentage">${percentage}%</span>
+                    </div>
+                    <div class="emotion-bar-container">
+                        <div class="emotion-bar-fill"
+                             style="width: ${percentage}%; background: ${metadata.color};">
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        });
+
+        html += '</div>';
+
+        // Render secondary emotions (collapsible)
+        if (secondaryEmotions.length > 0) {
+            html += `
+                <div class="emotion-breakdown-toggle">
+                    <button id="toggleMoreEmotions" class="btn-text">
+                        Show ${secondaryEmotions.length} more emotions
+                        <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                </div>
+                <div id="secondaryEmotions" class="emotion-breakdown-secondary" style="display: none;">
+            `;
+
+            secondaryEmotions.forEach(emotionKey => {
+                const metadata = emotionMetadata[emotionKey] || { icon: '😐', color: '#6B7280', category: 'neutral' };
+                const count = emotionBreakdown[emotionKey];
+                const percentage = emotionPercentages[emotionKey];
+
+                html += `
+                    <div class="emotion-bar-item emotion-${metadata.category}">
+                        <div class="emotion-header">
+                            <span class="emotion-name">
+                                <span class="emotion-icon">${metadata.icon}</span>
+                                <span class="emotion-label">${this.capitalizeEmotion(emotionKey)}</span>
+                                <span class="emotion-count">(${count})</span>
+                            </span>
+                            <span class="emotion-percentage">${percentage}%</span>
+                        </div>
+                        <div class="emotion-bar-container">
+                            <div class="emotion-bar-fill"
+                                 style="width: ${percentage}%; background: ${metadata.color};">
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+        }
+
+        return html;
+    }
+
+    /**
+     * Get emotion metadata (icons, colors, categories)
+     */
+    getEmotionMetadata() {
+        return {
+            // Positive emotions
+            'joy': { icon: '😊', color: '#10B981', category: 'positive' },
+            'love': { icon: '❤️', color: '#EC4899', category: 'positive' },
+            'admiration': { icon: '🤩', color: '#8B5CF6', category: 'positive' },
+            'approval': { icon: '👍', color: '#10B981', category: 'positive' },
+            'caring': { icon: '🤗', color: '#EC4899', category: 'positive' },
+            'excitement': { icon: '🎉', color: '#F59E0B', category: 'positive' },
+            'gratitude': { icon: '🙏', color: '#10B981', category: 'positive' },
+            'optimism': { icon: '✨', color: '#3B82F6', category: 'positive' },
+            'pride': { icon: '😌', color: '#8B5CF6', category: 'positive' },
+            'relief': { icon: '😮‍💨', color: '#10B981', category: 'positive' },
+            'desire': { icon: '😍', color: '#EC4899', category: 'positive' },
+            'amusement': { icon: '😄', color: '#F59E0B', category: 'positive' },
+
+            // Negative emotions
+            'anger': { icon: '😠', color: '#EF4444', category: 'negative' },
+            'annoyance': { icon: '😒', color: '#F97316', category: 'negative' },
+            'disappointment': { icon: '😞', color: '#EF4444', category: 'negative' },
+            'disapproval': { icon: '👎', color: '#DC2626', category: 'negative' },
+            'disgust': { icon: '🤢', color: '#84CC16', category: 'negative' },
+            'embarrassment': { icon: '😳', color: '#EC4899', category: 'negative' },
+            'fear': { icon: '😨', color: '#8B5CF6', category: 'negative' },
+            'grief': { icon: '😢', color: '#6366F1', category: 'negative' },
+            'nervousness': { icon: '😰', color: '#F59E0B', category: 'negative' },
+            'remorse': { icon: '😔', color: '#6B7280', category: 'negative' },
+            'sadness': { icon: '😭', color: '#3B82F6', category: 'negative' },
+
+            // Neutral/Mixed emotions
+            'neutral': { icon: '😐', color: '#6B7280', category: 'neutral' },
+            'surprise': { icon: '😲', color: '#F59E0B', category: 'surprise' },
+            'confusion': { icon: '😕', color: '#A855F7', category: 'surprise' },
+            'curiosity': { icon: '🤔', color: '#3B82F6', category: 'surprise' },
+            'realization': { icon: '💡', color: '#FBBF24', category: 'surprise' }
+        };
+    }
+
+    /**
+     * Capitalize emotion name
+     */
+    capitalizeEmotion(emotion) {
+        return emotion.charAt(0).toUpperCase() + emotion.slice(1);
     }
 
     /**

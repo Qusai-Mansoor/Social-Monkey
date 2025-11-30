@@ -1,0 +1,26 @@
+%% Sequence Diagram - Data Ingestion (system-level)
+%% Participants: User, Frontend, Backend API, Twitter API, DB, Preprocessor
+
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API
+    participant TwitterAPI as Twitter
+    participant DB
+    participant Preproc as Preprocessor
+
+    User->>Frontend: Click "Ingest Data" for account
+    Frontend->>API: POST /api/v1/data/ingest/{account_id}
+    API->>DB: SELECT SocialAccount (verify ownership)
+    API->>Twitter: GET /2/users/:id/tweets (using access_token)
+    Twitter-->>API: tweets[] (metadata)
+    API->>DB: INSERT Post rows
+    Note over API,DB: For each Post
+    API->>Twitter: GET replies (search / recent tweets)
+    Twitter-->>API: replies[]
+    API->>DB: INSERT Comment rows
+    API->>Preproc: preprocess text (content & replies)
+    Preproc-->>DB: updates preprocessed_content and is_preprocessed
+    API-->>Frontend: Return ingestion stats
+    Frontend-->>User: Show ingestion completion
+

@@ -1,0 +1,24 @@
+%% State Diagram - OAuth State and Ingestion State Transitions
+%% Description: Shows lifecycle of OAuthState and Ingestion job state
+
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> OAuthInitiated: request_authorize
+    OAuthInitiated --> AwaitingCallback: redirect_to_provider
+    AwaitingCallback --> TokenExchange: callback_received
+    TokenExchange --> Connected: token_exchanged_success
+    TokenExchange --> OAuthError: token_exchange_failed
+    OAuthError --> Idle
+    Connected --> Idle: user_done
+
+    %% Ingestion states
+    Idle --> IngestionRequested: ingest_triggered
+    IngestionRequested --> FetchingPosts: fetching_posts
+    FetchingPosts --> FetchingReplies: fetching_replies
+    FetchingReplies --> Preprocessing: preprocessing
+    Preprocessing --> Persisting: persisting_to_db
+    Persisting --> Completed: ingestion_success
+    Persisting --> IngestionError: ingestion_failed
+    IngestionError --> Idle
+    Completed --> Idle
+

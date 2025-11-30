@@ -1,0 +1,20 @@
+%% Activity Diagram - Twitter OAuth Flow
+%% Description: User-initiated OAuth connect flow (initiate -> callback -> token exchange -> store)
+
+flowchart TB
+    A[User clicks "Connect Twitter"] --> B[Frontend calls /api/v1/oauth/twitter/authorize]
+    B --> C[Backend: TwitterService.get_oauth_url]
+    C --> D[Create PKCE verifier & state -> store OAuthState in DB]
+    D --> E[Return authorization_url to Frontend]
+    E --> F[User redirected to Twitter Authorization page]
+    F --> G[User authorizes app on Twitter]
+    G --> H[Twitter redirects to /api/v1/oauth/twitter/callback?code=...&state=...]
+    H --> I[Backend: twitter_callback endpoint]
+    I --> J[TwitterService.handle_callback: look up OAuthState by state]
+    J --> K[Exchange code + code_verifier for tokens (Twitter API)]
+    K --> L[Encrypt tokens -> store/update SocialAccount in DB]
+    L --> M[Delete OAuthState from DB]
+    M --> N[Return success response to Frontend]
+
+    classDef default stroke:#333,stroke-width:1px
+

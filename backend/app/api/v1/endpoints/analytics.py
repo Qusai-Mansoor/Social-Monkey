@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import re
 
 from app.core.security import get_current_user
@@ -292,47 +292,54 @@ def get_user_stats(
 
 @router.get("/emotion-analysis")
 def get_emotion_analysis(
+    days: int = 30,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get emotion analysis of user's posts (Real Data)"""
+    """Get emotion analysis of user's posts (Real Data) with time-based trends"""
     try:
         # Get user's social accounts
         accounts = db.query(SocialAccount).filter(
             SocialAccount.user_id == current_user.id
         ).all()
-        
+
         if not accounts:
             return {
                 "emotions": {"positive": 0, "neutral": 0, "negative": 0},
-                "total_analyzed": 0
+                "total_analyzed": 0,
+                "breakdown": {},
+                "avg_sentiment_score": 0,
+                "emotion_trends": {"dates": [], "emotions": {}}
             }
-        
+
         account_ids = [account.id for account in accounts]
-        
+
+        # Calculate date range (timezone-aware for comparison with database dates)
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=days)
+
         # Get all posts that have been analyzed (have dominant_emotion)
-        # OPTIMIZED: Use SQL aggregation instead of fetching all rows
         emotion_counts = db.query(
-            Post.dominant_emotion, 
+            Post.dominant_emotion,
             func.count(Post.id)
         ).filter(
             Post.social_account_id.in_(account_ids),
             Post.dominant_emotion.isnot(None)
         ).group_by(Post.dominant_emotion).all()
-        
+
         emotions = {"positive": 0, "neutral": 0, "negative": 0}
         breakdown = {}
         total_analyzed = 0
-        
+
         # Simple mapping for aggregation
-        positive_set = {'joy', 'love', 'admiration', 'approval', 'caring', 'excitement', 'gratitude', 'optimism', 'pride', 'relief', 'desire'}
+        positive_set = {'joy', 'love', 'admiration', 'approval', 'caring', 'excitement', 'gratitude', 'optimism', 'pride', 'relief', 'desire', 'amusement'}
         negative_set = {'anger', 'annoyance', 'disappointment', 'disapproval', 'disgust', 'embarrassment', 'fear', 'grief', 'nervousness', 'remorse', 'sadness'}
-        
+
         for emotion, count in emotion_counts:
             # Update breakdown
             breakdown[emotion] = count
             total_analyzed += count
-            
+
             # Update aggregated emotions
             if emotion in positive_set:
                 emotions["positive"] += count
@@ -340,13 +347,96 @@ def get_emotion_analysis(
                 emotions["negative"] += count
             else:
                 emotions["neutral"] += count
-        
+
+        # Calculate average sentiment score from actual database values
+        sentiment_scores = db.query(Post.sentiment_score).filter(
+            Post.social_account_id.in_(account_ids),
+            Post.sentiment_score.isnot(None)
+        ).all()
+
+        avg_sentiment = 0
+        if sentiment_scores:
+            scores = [s[0] for s in sentiment_scores if s[0] is not None]
+            if scores:
+                # sentiment_score is -1 to 1, convert to 0-100
+                avg_raw = sum(scores) / len(scores)
+                avg_sentiment = round((avg_raw + 1) * 50, 1)  # Map -1->0, 0->50, 1->100
+
+        # Get emotion trends over time (last N days)
+        # Use created_at_platform for actual post dates, fallback to created_at if not available
+        posts_with_dates = db.query(Post).filter(
+            Post.social_account_id.in_(account_ids),
+            Post.dominant_emotion.isnot(None)
+        ).all()
+
+        # Filter posts by date and group by date and emotion
+        daily_emotion_counts = {}
+        for post in posts_with_dates:
+            # Use platform date if available, otherwise use created_at
+            post_date = post.created_at_platform if post.created_at_platform else post.created_at
+
+            if not post_date:
+                continue
+
+            # Check if post is within date range
+            if post_date < start_date or post_date > end_date:
+                continue
+
+            date_str = post_date.date().isoformat()
+            emotion = post.dominant_emotion
+
+            if date_str not in daily_emotion_counts:
+                daily_emotion_counts[date_str] = {}
+
+            daily_emotion_counts[date_str][emotion] = daily_emotion_counts[date_str].get(emotion, 0) + 1
+
+        # Get all unique emotions for trends
+        all_emotions = set(breakdown.keys())
+
+        # Build trend data
+        dates = sorted(daily_emotion_counts.keys())
+        emotion_trends = {emotion: [] for emotion in all_emotions}
+
+        for date in dates:
+            for emotion in all_emotions:
+                count = daily_emotion_counts[date].get(emotion, 0)
+                emotion_trends[emotion].append(count)
+
+        # If no trends data found but we have posts, it might be a date range issue
+        # Return debug info to help troubleshoot
+        debug_info = {}
+        if len(dates) == 0 and total_analyzed > 0:
+            # Get sample post dates to help debug
+            sample_posts = db.query(Post).filter(
+                Post.social_account_id.in_(account_ids),
+                Post.dominant_emotion.isnot(None)
+            ).limit(5).all()
+
+            debug_info = {
+                "message": "No posts found in date range",
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "sample_post_dates": [
+                    {
+                        "created_at": p.created_at.isoformat() if p.created_at else None,
+                        "created_at_platform": p.created_at_platform.isoformat() if p.created_at_platform else None
+                    }
+                    for p in sample_posts
+                ]
+            }
+
         return {
             "emotions": emotions,
             "breakdown": breakdown,
-            "total_analyzed": total_analyzed
+            "total_analyzed": total_analyzed,
+            "avg_sentiment_score": avg_sentiment,
+            "emotion_trends": {
+                "dates": dates,
+                "emotions": emotion_trends
+            },
+            "debug": debug_info if debug_info else None
         }
-        
+
     except Exception as e:
         print(f"Error in emotion-analysis: {e}")
         raise HTTPException(status_code=500, detail=f"Error analyzing emotions: {str(e)}")
@@ -481,26 +571,31 @@ def get_engagement_trends(
             return {"dates": [], "engagements": []}
         
         account_ids = [account.id for account in accounts]
-        
-        # Get posts from the last N days
-        end_date = datetime.now()
+
+        # Get posts from the last N days (timezone-aware)
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
-        
+
         posts = db.query(Post).filter(
-            Post.social_account_id.in_(account_ids),
-            Post.created_at >= start_date,
-            Post.created_at <= end_date
+            Post.social_account_id.in_(account_ids)
         ).all()
-        
+
         # Group by date and calculate average engagement
         daily_engagement = {}
         daily_counts = {}
-        
+
         for post in posts:
-            if not post.created_at:
+            # Use platform date if available, otherwise use created_at
+            post_date = post.created_at_platform if post.created_at_platform else post.created_at
+
+            if not post_date:
                 continue
-                
-            date_str = post.created_at.date().isoformat()
+
+            # Check if post is within date range
+            if post_date < start_date or post_date > end_date:
+                continue
+
+            date_str = post_date.date().isoformat()
             engagement = calculate_engagement(post)
             
             if date_str not in daily_engagement:
@@ -544,25 +639,30 @@ def get_post_frequency(
             return {"dates": [], "post_counts": []}
         
         account_ids = [account.id for account in accounts]
-        
-        # Get posts from the last N days
-        end_date = datetime.now()
+
+        # Get posts from the last N days (timezone-aware)
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
-        
+
         posts = db.query(Post).filter(
-            Post.social_account_id.in_(account_ids),
-            Post.created_at >= start_date,
-            Post.created_at <= end_date
+            Post.social_account_id.in_(account_ids)
         ).all()
-        
+
         # Group by date and count posts
         daily_counts = {}
-        
+
         for post in posts:
-            if not post.created_at:
+            # Use platform date if available, otherwise use created_at
+            post_date = post.created_at_platform if post.created_at_platform else post.created_at
+
+            if not post_date:
                 continue
-                
-            date_str = post.created_at.date().isoformat()
+
+            # Check if post is within date range
+            if post_date < start_date or post_date > end_date:
+                continue
+
+            date_str = post_date.date().isoformat()
             daily_counts[date_str] = daily_counts.get(date_str, 0) + 1
         
         # Create complete date range
