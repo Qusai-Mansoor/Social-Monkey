@@ -231,10 +231,53 @@ class StatCards {
             'heart': '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>',
             'smile': '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>',
             'message-circle': '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>',
+            'alert': '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>',
             'arrow-up': '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>',
             'arrow-down': '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>'
         };
         return icons[name] || '';
+    }
+
+    /**
+     * Generate overview-specific stat cards (for main dashboard)
+     */
+    generateOverviewCards(statsData) {
+        const cards = [
+            {
+                title: 'Total Posts',
+                value: this.formatNumber(statsData.posts || 0),
+                trend: 'Total analyzed',
+                icon: 'message-circle',
+                trendType: 'neutral'
+            },
+            {
+                title: 'Total Engagement',
+                value: this.formatEngagement(statsData.engagement || 0),
+                trend: 'Across all posts',
+                icon: 'heart',
+                trendType: 'neutral'
+            },
+            {
+                title: 'Avg Emotion Score',
+                value: this.formatPercent(statsData.sentiment || 0),
+                trend: this.getSentimentTrend(statsData.sentiment),
+                icon: 'smile',
+                trendType: this.getSentimentStatus(statsData.sentiment)
+            },
+            {
+                title: 'Flagged Posts',
+                value: this.formatNumber(statsData.flaggedPosts || 0),
+                trend: 'Needs attention',
+                icon: 'alert',
+                trendType: statsData.flaggedPosts > 0 ? 'negative' : 'neutral'
+            }
+        ];
+
+        const cardsHTML = cards.map(card =>
+            this.createCard(card.title, card.value, card.trend, card.icon, card.trendType)
+        ).join('');
+
+        return `<div class="stats-grid">${cardsHTML}</div>`;
     }
 
     /**
@@ -266,7 +309,7 @@ class StatCards {
         ];
 
         // Build custom cards grid
-        const cardsHTML = cards.map(card => 
+        const cardsHTML = cards.map(card =>
             this.createCard(card.title, card.value, card.trend, card.icon, card.trendType)
         ).join('');
 

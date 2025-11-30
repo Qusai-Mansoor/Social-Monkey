@@ -175,7 +175,7 @@ def get_posts(
         return [
             {
                 "id": post.id,
-                "platform": post.platform,
+                "platform": post.social_account.platform if post.social_account else "twitter",
                 "content": post.content,
                 "created_at_platform": post.created_at_platform.isoformat() if post.created_at_platform else None,
                 "likes_count": post.likes_count or 0,
@@ -540,8 +540,13 @@ def get_top_posts(
                 "replies_count": post.replies_count or 0,
                 "engagement": engagement,
                 "emotion": emotion,
+                "dominant_emotion": post.dominant_emotion,
+                "emotion_scores": post.emotion_scores,  # JSON with all 28 emotions
+                "sentiment_score": post.sentiment_score,  # Float for percentage calculation
                 "slang_terms": slang_terms,
                 "created_at": post.created_at.isoformat() if post.created_at else None,
+                "created_at_platform": post.created_at_platform.isoformat() if post.created_at_platform else None,
+                "platform": post.social_account.platform if post.social_account else "twitter",
                 "platform_post_id": post.platform_post_id
             })
         
