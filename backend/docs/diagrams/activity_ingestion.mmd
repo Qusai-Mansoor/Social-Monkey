@@ -1,17 +1,83 @@
-%% Activity Diagram - Data Ingestion (Twitter)
-%% Description: Ingest posts and comments for a connected SocialAccount
+%% Activity Diagram - SocialMonkey Data Processing Pipeline
+%% Iteration 1: OAuth, Data Ingestion, Text Preprocessing, Basic UI
+%% Iteration 2: Emotion Analysis (Module 2), Slang Detection (Module 3), Advanced Analytics
 
-flowchart TB
-    U[Authenticated User triggers ingest] --> BE[Backend /api/v1/data/ingest/{account_id}]
-    BE --> S[Verify SocialAccount belongs to user]
-    S --> T{platform == "twitter"}
-    T -- yes --> TS[TwitterService.fetch_user_tweets]
-    TS --> DB1[Store Post rows in DB]
-    DB1 --> ForEachPost[For each new post]
-    ForEachPost --> TR[TwitterService.fetch_tweet_replies]
-    TR --> DB2[Store Comment rows in DB]
-    DB2 --> Preproc[TextPreprocessor.preprocess]
-    Preproc --> UpdatePost[Mark is_preprocessed=True]
-    UpdatePost --> Finish[Return ingestion statistics]
-    T -- no --> Unsupported[Return 501 - platform not supported]
+stateDiagram-v2
+    [*] --> UserLogin: Start
+    UserLogin --> Dashboard: Authentication Success
+    
+    Dashboard --> CheckConnection: Load Dashboard
+    CheckConnection --> OAuthFlow: Account Not Connected
+    CheckConnection --> DataIngestion: Account Connected
+    
+    state OAuthFlow {
+        [*] --> InitiateOAuth: User Clicks Connect
+        InitiateOAuth --> UserAuthorization: Generate OAuth URL
+        UserAuthorization --> TokenExchange: User Approves
+        TokenExchange --> StoreCredentials: Exchange Code for Token
+        StoreCredentials --> [*]: Connection Success
+    }
+    
+    OAuthFlow --> Dashboard: Return to Dashboard
+    
+    state DataIngestion {
+        [*] --> VerifyAccount: User Triggers Sync
+        VerifyAccount --> CheckPlatform: Validate Ownership
+        
+        state CheckPlatform <<choice>>
+        CheckPlatform --> FetchData: Supported Platform
+        CheckPlatform --> [*]: Unsupported Platform
+        
+        FetchData --> ProcessPosts: Retrieve Posts & Comments
+        ProcessPosts --> fork_process
+        
+        state fork_process <<fork>>
+        fork_process --> TextPreprocessing
+        fork_process --> EmotionAnalysis
+        fork_process --> SlangDetection
+        
+        state TextPreprocessing {
+            [*] --> CleanText: Normalize Content
+            CleanText --> DetectLanguage
+            DetectLanguage --> [*]
+        }
+        
+        state EmotionAnalysis {
+            [*] --> AnalyzeEmotion: AI Model Processing
+            AnalyzeEmotion --> CalculateSentiment
+            CalculateSentiment --> [*]: Store Emotion Scores
+        }
+        
+        state SlangDetection {
+            [*] --> ScanSlang: Pattern Matching
+            ScanSlang --> ExtractTerms
+            ExtractTerms --> [*]: Store Slang Data
+        }
+        
+        state join_process <<join>>
+        TextPreprocessing --> join_process
+        EmotionAnalysis --> join_process
+        SlangDetection --> join_process
+        
+        join_process --> StoreDatabase: Save Processed Data
+        StoreDatabase --> CheckMore
+        
+        state CheckMore <<choice>>
+        CheckMore --> FetchData: More Data Available
+        CheckMore --> GenerateAnalytics: Processing Complete
+        
+        GenerateAnalytics --> [*]: Return Statistics
+    }
+    
+    DataIngestion --> UpdateDashboard: Ingestion Complete
+    
+    state UpdateDashboard {
+        [*] --> CalculateMetrics: Aggregate Data
+        CalculateMetrics --> RenderCharts: Compute Trends
+        RenderCharts --> DisplayResults: Update UI
+        DisplayResults --> [*]
+    }
+    
+    UpdateDashboard --> Dashboard: Refresh View
+    Dashboard --> [*]: User Logout
 

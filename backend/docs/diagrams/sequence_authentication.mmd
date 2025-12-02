@@ -1,0 +1,62 @@
+%% Sequence Diagram - User Authentication Flow
+%% Shows interaction for user registration and login
+
+sequenceDiagram
+    title SocialMonkey - User Authentication Flow
+    
+    actor User
+    participant Frontend as Application<br/>Interface
+    participant AuthController as Auth<br/>Controller
+    participant SecurityManager as Security<br/>Manager
+    participant Database as Database
+    
+    %% Registration Flow
+    rect rgb(230, 245, 255)
+        Note over User,Database: User Registration
+        User->>Frontend: Enter registration details
+        Frontend->>AuthController: POST /auth/register
+        AuthController->>SecurityManager: get_password_hash(password)
+        SecurityManager-->>AuthController: hashed_password
+        AuthController->>Database: create User record
+        Database-->>AuthController: user_created
+        AuthController->>SecurityManager: create_access_token(user_id)
+        SecurityManager-->>AuthController: jwt_token
+        AuthController-->>Frontend: {token, user_data}
+        Frontend->>User: Display "Registration Successful"
+    end
+    
+    %% Login Flow
+    rect rgb(255, 245, 230)
+        Note over User,Database: User Login
+        User->>Frontend: Enter credentials
+        Frontend->>AuthController: POST /auth/login
+        AuthController->>Database: query User by email
+        Database-->>AuthController: user_record
+        AuthController->>SecurityManager: verify_password(plain, hashed)
+        SecurityManager-->>AuthController: password_valid
+        
+        alt Password valid
+            AuthController->>SecurityManager: create_access_token(user_id)
+            SecurityManager-->>AuthController: jwt_token
+            AuthController-->>Frontend: {token, user_data}
+            Frontend->>User: Redirect to Dashboard
+        else Password invalid
+            AuthController-->>Frontend: error: Invalid credentials
+            Frontend->>User: Display error message
+        end
+    end
+    
+    %% Protected Request Flow
+    rect rgb(245, 255, 230)
+        Note over User,Database: Accessing Protected Resource
+        User->>Frontend: Request dashboard data
+        Frontend->>AuthController: GET /analytics/overview<br/>(with JWT token)
+        AuthController->>SecurityManager: verify_token(token)
+        SecurityManager-->>AuthController: user_id
+        AuthController->>Database: get user's social accounts
+        Database-->>AuthController: accounts_data
+        AuthController->>Database: get posts & analytics
+        Database-->>AuthController: analytics_data
+        AuthController-->>Frontend: dashboard_data
+        Frontend->>User: Display dashboard
+    end

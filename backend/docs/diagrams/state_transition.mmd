@@ -1,0 +1,102 @@
+%% State Transition Diagram - SocialMonkey Platform
+%% Concise representation of key state transitions following UML standards
+
+stateDiagram-v2
+    [*] --> LandingPage: Application Start
+    
+    LandingPage --> Login: Has Account
+    LandingPage --> Register: New User
+    
+    Register --> Dashboard: Registration Success
+    Register --> LandingPage: Registration Failed
+    
+    Login --> Dashboard: Login Success
+    Login --> LandingPage: Login Failed
+    
+    Dashboard --> ConnectingAccount: Click Connect Account
+    Dashboard --> ViewingAnalytics: View Analytics
+    Dashboard --> [*]: Logout
+    
+    ConnectingAccount --> AuthorizingOAuth: Initiate OAuth
+    AuthorizingOAuth --> StoringToken: User Approves
+    AuthorizingOAuth --> Dashboard: User Denies/OAuth Failed
+    StoringToken --> AccountActive: Token Saved Successfully
+    StoringToken --> Dashboard: Token Storage Failed
+    
+    AccountActive --> SyncingData: Trigger Sync
+    AccountActive --> AccountExpired: Token Expired
+    AccountActive --> Dashboard: Disconnect Account
+    
+    SyncingData --> FetchingPosts: Start Fetching
+    SyncingData --> AccountActive: Sync Failed
+    FetchingPosts --> AnalyzingContent: Posts Retrieved
+    FetchingPosts --> AccountActive: No Posts Found
+    AnalyzingContent --> ProcessingEmotion: Text Preprocessed
+    ProcessingEmotion --> DetectingSlang: Emotions Analyzed
+    DetectingSlang --> SavingData: Slang Detected
+    SavingData --> FetchingPosts: More Posts Available
+    SavingData --> AccountActive: All Data Synced
+    SavingData --> AccountActive: Save Failed
+    SyncingData --> RateLimited: API Limit Exceeded
+    RateLimited --> AccountActive: Wait Period Elapsed
+    
+    AccountExpired --> ConnectingAccount: Reconnect Required
+    
+    ViewingAnalytics --> DisplayingData: Data Available
+    ViewingAnalytics --> Dashboard: No Data Found
+    DisplayingData --> FilteringEmotion: Apply Emotion Filter
+    DisplayingData --> FilteringSlang: Search Slang
+    DisplayingData --> Dashboard: Close Analytics
+    FilteringEmotion --> DisplayingData: Show Results
+    FilteringSlang --> DisplayingData: Show Results
+    
+    note right of LandingPage
+        Entry point for all users
+        Two options:
+        - Login (existing users)
+        - Register (new users)
+    end note
+    
+    note right of Register
+        Success: User created, redirect to Dashboard
+        Failure: Invalid data, return to Landing
+    end note
+    
+    note right of Login
+        Success: Valid credentials, redirect to Dashboard
+        Failure: Invalid credentials, return to Landing
+    end note
+    
+    note right of AuthorizingOAuth
+        OAuth 2.0 flow with PKCE
+        Success: User approves → Store token
+        Failure: User denies/error → Dashboard
+    end note
+    
+    note right of StoringToken
+        Success: Token encrypted and saved → Active
+        Failure: Database error → Dashboard
+    end note
+    
+    note right of SyncingData
+        Success path: Fetch → Analyze → Save
+        Failure paths:
+        - No posts found → Active
+        - API limit → Rate limited
+        - Save error → Active
+    end note
+    
+    note right of AnalyzingContent
+        Sequential processing:
+        1. Text preprocessing
+        2. Emotion detection (AI)
+        3. Slang identification
+        4. Database storage
+    end note
+    
+    note left of RateLimited
+        API rate limit handling
+        Waits for reset window
+        Typically 15 minutes
+        Then returns to Active state
+    end note

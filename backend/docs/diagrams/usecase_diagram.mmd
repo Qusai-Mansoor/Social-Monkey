@@ -1,0 +1,83 @@
+%% Use Case Diagram - SocialMonkey Platform
+%% Shows actors (stick figures), use cases (ovals), and system boundaries following UML standards
+
+graph LR
+    %% ========================================
+    %% LEFT SIDE - PRIMARY ACTORS (Stick Figures)
+    %% ========================================
+    User([👤<br/>User])
+    RegUser([👤<br/>Registered<br/>User])
+    
+    %% ========================================
+    %% CENTER - SYSTEM BOUNDARY WITH USE CASES
+    %% ========================================
+    subgraph SocialMonkey["⟨⟨Subsystem⟩⟩<br/><b>SocialMonkey Platform</b>"]
+        direction TB
+        
+        UC1((Register<br/>Account))
+        UC2((Login))
+        UC3((Connect Social<br/>Account))
+        UC4((View<br/>Dashboard))
+        UC5((Sync Social<br/>Data))
+        UC6((View<br/>Posts))
+        UC7((View<br/>Analytics))
+        UC8((View Emotion<br/>Analysis))
+        UC9((View Slang<br/>Insights))
+        UC10((Disconnect<br/>Account))
+        UC11((Update<br/>Profile))
+    end
+    
+    %% ========================================
+    %% RIGHT SIDE - EXTERNAL SERVICES (Secondary Actors)
+    %% ========================================
+    Twitter([👤<br/>⟨⟨Service⟩⟩<br/>Twitter API])
+    Instagram([👤<br/>⟨⟨Service⟩⟩<br/>Instagram API])
+    EmotionAI([👤<br/>⟨⟨Service⟩⟩<br/>Emotion AI])
+    SlangAI([👤<br/>⟨⟨Service⟩⟩<br/>Slang Detector])
+    
+    %% ========================================
+    %% ACTOR GENERALIZATION
+    %% ========================================
+    User -.->|inherits| RegUser
+    
+    %% ========================================
+    %% LEFT SIDE - ACTOR TO USE CASE ASSOCIATIONS
+    %% ========================================
+    User --> UC1
+    User --> UC2
+    RegUser --> UC3
+    RegUser --> UC4
+    RegUser --> UC5
+    RegUser --> UC6
+    RegUser --> UC7
+    RegUser --> UC10
+    RegUser --> UC11
+    
+    %% ========================================
+    %% INCLUDE RELATIONSHIPS (Dashed arrows)
+    %% ========================================
+    UC4 -.->|⟨⟨include⟩⟩| UC5
+    UC7 -.->|⟨⟨include⟩⟩| UC8
+    UC7 -.->|⟨⟨include⟩⟩| UC9
+    UC5 -.->|⟨⟨include⟩⟩| UC6
+    
+    %% ========================================
+    %% RIGHT SIDE - USE CASE TO SERVICE ASSOCIATIONS
+    %% ========================================
+    UC3 --> Twitter
+    UC3 --> Instagram
+    UC5 --> Twitter
+    UC5 --> Instagram
+    UC8 --> EmotionAI
+    UC9 --> SlangAI
+    
+    %% ========================================
+    %% STYLING
+    %% ========================================
+    style SocialMonkey fill:#e3f2fd,stroke:#1565c0,stroke-width:3px,color:#000
+    style User fill:#fff,stroke:#333,stroke-width:2px
+    style RegUser fill:#fff,stroke:#333,stroke-width:2px
+    style Twitter fill:#fff,stroke:#333,stroke-width:2px
+    style Instagram fill:#fff,stroke:#333,stroke-width:2px
+    style EmotionAI fill:#fff,stroke:#333,stroke-width:2px
+    style SlangAI fill:#fff,stroke:#333,stroke-width:2px

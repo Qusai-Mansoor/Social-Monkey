@@ -1,0 +1,136 @@
+%% Detailed Architecture Diagram - SocialMonkey Platform
+%% Complete system architecture with all components and data flow
+
+graph TB
+    subgraph UserLayer["User Layer"]
+        User[👤 User<br/>Browser]
+    end
+    
+    subgraph FrontendLayer["Frontend Layer - Vanilla JavaScript"]
+        Landing[Landing Page<br/>index.html]
+        Register[Registration<br/>register.html]
+        Dashboard[Dashboard<br/>dashboard.html]
+        
+        subgraph UIComponents["UI Components"]
+            AuthUI[Authentication UI<br/>Login/Register Forms]
+            ConnectUI[Social Connect UI<br/>OAuth Flow Trigger]
+            SyncUI[Data Sync UI<br/>Sync Button]
+            AnalyticsUI[Analytics Display<br/>Charts & Visualizations]
+        end
+    end
+    
+    subgraph BackendAPI["Backend API Layer - FastAPI on Port 3000"]
+        Router[API Router<br/>Route Management]
+        
+        subgraph Controllers["Controllers"]
+            AuthCtrl[Auth Controller<br/>/auth/register<br/>/auth/login]
+            OAuthCtrl[OAuth Controller<br/>/oauth/twitter/url<br/>/oauth/callback]
+            IngestCtrl[Ingestion Controller<br/>/ingestion/ingest<br/>/ingestion/accounts]
+            AnalyticsCtrl[Analytics Controller<br/>/analytics/overview<br/>/analytics/emotion<br/>/analytics/slang]
+        end
+    end
+    
+    subgraph ServiceLayer["Service Layer"]
+        subgraph CoreServices["Core Services"]
+            SecurityMgr[Security Manager<br/>• create_access_token<br/>• verify_token<br/>• get_password_hash<br/>• verify_password]
+            TwitterSvc[Twitter Service<br/>• get_oauth_url<br/>• handle_callback<br/>• fetch_user_tweets<br/>• fetch_tweet_replies]
+            TokenEncrypt[Token Encryption<br/>• Fernet cipher<br/>• encrypt/decrypt]
+        end
+        
+        subgraph ProcessingServices["Processing Services"]
+            TextPreproc[Text Preprocessor<br/>• clean_text<br/>• normalize_emoji<br/>• expand_slang<br/>• detect_language]
+        end
+        
+        subgraph AIServices["AI Analysis Services - Module 2 & 3"]
+            EmotionEngine[Emotion Engine<br/>🤖 Singleton Pattern<br/>Model: RoBERTa-base-go_emotions<br/>• 28 emotion categories<br/>• Sentiment score -1 to +1<br/>• Confidence scores]
+            SlangDetect[Slang Detector<br/>📚 Gen-Z Dictionary<br/>• 70+ slang terms<br/>• Pattern matching<br/>• Meaning extraction]
+        end
+    end
+    
+    subgraph ExternalAPIs["External APIs"]
+        TwitterAPI[Twitter API v2<br/>• OAuth 2.0 PKCE<br/>• Fetch posts<br/>• Fetch replies<br/>• Rate limit: 180/15min]
+        InstagramAPI[Instagram API<br/>⏳ Future Implementation]
+    end
+    
+    subgraph DataLayer["Data Storage Layer"]
+        subgraph Database["PostgreSQL Database - Supabase"]
+            UserTable[(Users Table<br/>• id, email, username<br/>• hashed_password<br/>• is_active)]
+            SocialAccTable[(SocialAccounts<br/>• encrypted tokens<br/>• platform info<br/>• connection status)]
+            PostTable[(Posts Table<br/>• content, metrics<br/>• emotion_scores JSON<br/>• detected_slang JSON<br/>• sentiment_score)]
+            CommentTable[(Comments Table<br/>• content, author<br/>• emotion_scores JSON<br/>• detected_slang JSON)]
+            OAuthTable[(OAuthState<br/>• PKCE state<br/>• code_verifier)]
+        end
+        
+        RateLimitFile[Rate Limit Storage<br/>JSON File<br/>• tweet_request_count<br/>• reply_request_count<br/>• timestamps]
+    end
+    
+    %% User to Frontend
+    User -->|Browse| Landing
+    User -->|Register/Login| AuthUI
+    User -->|Connect Account| ConnectUI
+    User -->|Sync Data| SyncUI
+    User -->|View Analytics| AnalyticsUI
+    
+    %% Frontend to Backend
+    Landing -->|HTTP Requests| Router
+    Register -->|HTTP Requests| Router
+    Dashboard -->|HTTP Requests| Router
+    
+    %% Router to Controllers
+    Router --> AuthCtrl
+    Router --> OAuthCtrl
+    Router --> IngestCtrl
+    Router --> AnalyticsCtrl
+    
+    %% Auth Controller Flow
+    AuthCtrl -->|Hash Password| SecurityMgr
+    AuthCtrl -->|Generate JWT| SecurityMgr
+    AuthCtrl -->|Store User| UserTable
+    
+    %% OAuth Controller Flow
+    OAuthCtrl -->|Generate OAuth URL| TwitterSvc
+    OAuthCtrl -->|Handle Callback| TwitterSvc
+    OAuthCtrl -->|Store State| OAuthTable
+    
+    %% Twitter Service Flow
+    TwitterSvc -->|OAuth Flow| TwitterAPI
+    TwitterSvc -->|Encrypt Tokens| TokenEncrypt
+    TwitterSvc -->|Store Account| SocialAccTable
+    TwitterSvc -->|Check Rate Limit| RateLimitFile
+    
+    %% Ingestion Flow
+    IngestCtrl -->|Fetch Data| TwitterSvc
+    TwitterSvc -->|Get Posts/Comments| TwitterAPI
+    TwitterSvc -->|Clean Text| TextPreproc
+    TwitterSvc -->|Analyze Emotion| EmotionEngine
+    TwitterSvc -->|Detect Slang| SlangDetect
+    TwitterSvc -->|Store Posts| PostTable
+    TwitterSvc -->|Store Comments| CommentTable
+    
+    %% Analytics Flow
+    AnalyticsCtrl -->|Query Data| PostTable
+    AnalyticsCtrl -->|Query Data| CommentTable
+    AnalyticsCtrl -->|Get Accounts| SocialAccTable
+    
+    %% Database Relationships
+    UserTable -.->|1:N| SocialAccTable
+    SocialAccTable -.->|1:N| PostTable
+    PostTable -.->|1:N| CommentTable
+    UserTable -.->|1:N| OAuthTable
+    
+    %% Styling
+    classDef userStyle fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    classDef frontendStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef backendStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef serviceStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef aiStyle fill:#ffe0b2,stroke:#e65100,stroke-width:3px
+    classDef externalStyle fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef dataStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    
+    class User userStyle
+    class Landing,Register,Dashboard,AuthUI,ConnectUI,SyncUI,AnalyticsUI frontendStyle
+    class Router,AuthCtrl,OAuthCtrl,IngestCtrl,AnalyticsCtrl backendStyle
+    class SecurityMgr,TwitterSvc,TokenEncrypt,TextPreproc serviceStyle
+    class EmotionEngine,SlangDetect aiStyle
+    class TwitterAPI,InstagramAPI externalStyle
+    class UserTable,SocialAccTable,PostTable,CommentTable,OAuthTable,RateLimitFile dataStyle
