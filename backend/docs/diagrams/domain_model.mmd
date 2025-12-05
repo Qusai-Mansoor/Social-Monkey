@@ -1,0 +1,315 @@
+%% Domain Model - SocialMonkey Platform
+%% Comprehensive business domain representation
+%% Includes: Entities, Value Objects, Aggregates, Domain Services, and Business Rules
+
+classDiagram
+    %% ========================================
+    %% AGGREGATES (Clusters of related entities)
+    %% ========================================
+    
+    class UserAggregate {
+        <<Aggregate Root>>
+        +authenticate(credentials)
+        +register(userData)
+        +connectSocialAccount(platform)
+        +disconnectAccount(accountId)
+        +getConnectedPlatforms()
+    }
+    
+    class ContentAggregate {
+        <<Aggregate Root>>
+        +ingestContent(account)
+        +analyzeContent()
+        +updateEngagementMetrics()
+        +getAnalytics()
+        +filterByEmotion(emotion)
+        +searchBySlang(term)
+    }
+    
+    %% ========================================
+    %% ENTITIES (Objects with identity)
+    %% ========================================
+    
+    class User {
+        <<Entity>>
+        userId: UserId
+        email: EmailAddress
+        username: Username
+        credentials: Credentials
+        status: AccountStatus
+        +login()
+        +logout()
+        +changePassword()
+        +updateProfile()
+    }
+    
+    class SocialAccount {
+        <<Entity>>
+        accountId: AccountId
+        platform: PlatformType
+        platformIdentity: PlatformIdentity
+        authToken: OAuthToken
+        connectionStatus: ConnectionStatus
+        +authorize()
+        +refreshToken()
+        +revoke()
+        +syncContent()
+    }
+    
+    class SocialContent {
+        <<Entity>>
+        contentId: ContentId
+        source: SocialAccount
+        rawContent: RawText
+        processedContent: ProcessedText
+        metadata: ContentMetadata
+        engagement: EngagementMetrics
+        analysis: ContentAnalysis
+        +preprocess()
+        +analyze()
+        +updateMetrics()
+        +getInsights()
+    }
+    
+    class Conversation {
+        <<Entity>>
+        conversationId: ConversationId
+        originalPost: SocialContent
+        replies: List~SocialContent~
+        participants: List~Author~
+        +fetchReplies()
+        +analyzeInteraction()
+        +calculateEngagement()
+    }
+    
+    %% ========================================
+    %% VALUE OBJECTS (Immutable business concepts)
+    %% ========================================
+    
+    class EmotionProfile {
+        <<Value Object>>
+        dominantEmotion: EmotionType
+        emotionScores: EmotionDistribution
+        sentimentPolarity: SentimentScore
+        confidence: Confidence
+        +getPrimaryEmotion()
+        +getSentimentCategory()
+        +getEmotionIntensity()
+    }
+    
+    class SlangProfile {
+        <<Value Object>>
+        detectedSlang: List~SlangTerm~
+        slangDensity: Percentage
+        generationalMarkers: List~Generation~
+        +interpretSlang()
+        +getGenerationIndicators()
+        +hasSlang()
+    }
+    
+    class EngagementMetrics {
+        <<Value Object>>
+        likes: Count
+        shares: Count
+        replies: Count
+        engagementRate: Percentage
+        viralityScore: Score
+        +calculateEngagementRate()
+        +getPopularityLevel()
+    }
+    
+    class ContentAnalysis {
+        <<Value Object>>
+        emotions: EmotionProfile
+        slang: SlangProfile
+        language: Language
+        sentiment: SentimentPolarity
+        insights: AnalysisInsights
+        +generateSummary()
+        +getKeyFindings()
+    }
+    
+    class OAuthToken {
+        <<Value Object>>
+        accessToken: EncryptedToken
+        refreshToken: EncryptedToken
+        expiresAt: DateTime
+        scope: Permissions
+        +isExpired()
+        +refresh()
+        +encrypt()
+        +decrypt()
+    }
+    
+    class PlatformIdentity {
+        <<Value Object>>
+        platformUserId: String
+        username: String
+        displayName: String
+        profileUrl: URL
+    }
+    
+    class ProcessedText {
+        <<Value Object>>
+        cleanedText: String
+        normalizedEmojis: String
+        expandedSlang: String
+        detectedLanguage: Language
+        +normalize()
+        +clean()
+        +detectLanguage()
+    }
+    
+    %% ========================================
+    %% DOMAIN SERVICES (Business operations)
+    %% ========================================
+    
+    class EmotionDetector {
+        <<Domain Service>>
+        +analyzeEmotion(text): EmotionProfile
+        +detectSentiment(text): SentimentScore
+        +classifyEmotions(text): EmotionDistribution
+        +calculateConfidence(scores): Confidence
+    }
+    
+    class SlangInterpreter {
+        <<Domain Service>>
+        +detectSlang(text): SlangProfile
+        +interpretTerms(terms): Interpretations
+        +identifyGeneration(slang): Generation
+        +calculateDensity(text, slang): Percentage
+    }
+    
+    class ContentFetcher {
+        <<Domain Service>>
+        +fetchPosts(account): List~SocialContent~
+        +fetchReplies(post): List~SocialContent~
+        +syncAccount(account): SyncResult
+        +handleRateLimit(): RateLimitStrategy
+    }
+    
+    class TextProcessor {
+        <<Domain Service>>
+        +preprocess(text): ProcessedText
+        +normalizeEmojis(text): String
+        +expandSlang(text): String
+        +detectLanguage(text): Language
+        +cleanText(text): String
+    }
+    
+    class AnalyticsEngine {
+        <<Domain Service>>
+        +generateEmotionTrends(content): EmotionTrends
+        +calculateSlangStatistics(content): SlangStats
+        +rankByEngagement(content): RankedList
+        +identifyPatterns(content): Patterns
+    }
+    
+    class AuthenticationService {
+        <<Domain Service>>
+        +authenticate(credentials): AuthResult
+        +authorizeOAuth(platform): OAuthURL
+        +handleCallback(code): OAuthToken
+        +validateToken(token): Boolean
+    }
+    
+    %% ========================================
+    %% ENUMERATIONS (Business constants)
+    %% ========================================
+    
+    class PlatformType {
+        <<Enumeration>>
+        TWITTER
+        INSTAGRAM
+    }
+    
+    class EmotionType {
+        <<Enumeration>>
+        JOY
+        SADNESS
+        ANGER
+        FEAR
+        SURPRISE
+        LOVE
+        ADMIRATION
+        DISGUST
+        ... (28 total)
+    }
+    
+    class ConnectionStatus {
+        <<Enumeration>>
+        ACTIVE
+        EXPIRED
+        REVOKED
+        PENDING
+    }
+    
+    class AccountStatus {
+        <<Enumeration>>
+        ACTIVE
+        INACTIVE
+        SUSPENDED
+    }
+    
+    %% ========================================
+    %% RELATIONSHIPS
+    %% ========================================
+    
+    %% Aggregates contain entities
+    UserAggregate o-- User : root
+    UserAggregate *-- SocialAccount : manages
+    ContentAggregate o-- SocialContent : root
+    ContentAggregate *-- Conversation : organizes
+    
+    %% Entity relationships
+    User "1" -- "0..*" SocialAccount : owns
+    SocialAccount "1" -- "0..*" SocialContent : sources
+    SocialContent "1" -- "1" ContentAnalysis : has
+    Conversation "1" -- "1..*" SocialContent : comprises
+    
+    %% Entities use value objects
+    User *-- "1" AccountStatus : has
+    SocialAccount *-- "1" PlatformType : specifies
+    SocialAccount *-- "1" PlatformIdentity : identifies
+    SocialAccount *-- "1" OAuthToken : secured by
+    SocialAccount *-- "1" ConnectionStatus : has
+    SocialContent *-- "1" ProcessedText : contains
+    SocialContent *-- "1" EngagementMetrics : measures
+    ContentAnalysis *-- "1" EmotionProfile : includes
+    ContentAnalysis *-- "1" SlangProfile : includes
+    
+    %% Domain services operate on entities/value objects
+    AuthenticationService ..> User : authenticates
+    AuthenticationService ..> OAuthToken : generates
+    ContentFetcher ..> SocialAccount : fetches from
+    ContentFetcher ..> SocialContent : creates
+    TextProcessor ..> ProcessedText : produces
+    EmotionDetector ..> EmotionProfile : analyzes
+    SlangInterpreter ..> SlangProfile : detects
+    AnalyticsEngine ..> ContentAnalysis : processes
+    
+    %% Service dependencies
+    ContentAggregate ..> ContentFetcher : uses
+    ContentAggregate ..> TextProcessor : uses
+    ContentAggregate ..> EmotionDetector : uses
+    ContentAggregate ..> SlangInterpreter : uses
+    ContentAggregate ..> AnalyticsEngine : uses
+    UserAggregate ..> AuthenticationService : uses
+    
+    %% ========================================
+    %% DOMAIN NOTES
+    %% ========================================
+    
+    note for UserAggregate "Manages user identity, authentication,\nand social account connections.\nEnforces business rules for account linking."
+    
+    note for ContentAggregate "Orchestrates content ingestion,\nprocessing, analysis, and analytics.\nMaintains content consistency."
+    
+    note for EmotionProfile "Immutable snapshot of emotional analysis\nresults. Captures 28 emotion categories\nwith confidence scores."
+    
+    note for SlangProfile "Identifies generational language patterns.\nProvides context for informal communication.\nEnhances content understanding."
+    
+    note for OAuthToken "Secure, encrypted token management.\nHandles expiration and refresh logic.\nEnsures secure API access."
+    
+    note for EmotionDetector "Uses transformer-based AI model\n(RoBERTa) for emotion classification.\nProvides multi-label emotion detection."
+    
+    note for ContentFetcher "Handles platform-specific API integration.\nManages rate limits and pagination.\nEnsures reliable data synchronization."

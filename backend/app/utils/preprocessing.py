@@ -60,6 +60,10 @@ class TextPreprocessor:
         Returns:
             tuple: (preprocessed_text, detected_language)
         """
+        # Handle None input
+        if text is None:
+            return "", None
+        
         # Step 1: Normalize emojis
         text = self.normalize_emoji(text)
         

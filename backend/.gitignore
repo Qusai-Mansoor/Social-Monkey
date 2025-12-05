@@ -50,8 +50,13 @@ logs/
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .tox/
+.nox/
+coverage.xml
+*.cover
+test_execution_report.txt
 
 # OS
 .DS_Store
@@ -62,3 +67,23 @@ alembic/versions/*.pyc
 
 # uv
 .uv/
+uv.lock
+
+# Hugging Face Models (large files)
+models/
+*.bin
+*.pt
+*.pth
+*.safetensors
+*.h5
+*.onnx
+
+# OAuth secrets and tokens
+oauth_state.json
+tokens/
+twitter_rate_limits.json
+
+# Temporary files
+*.tmp
+*.bak
+*.cache

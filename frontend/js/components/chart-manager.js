@@ -266,8 +266,58 @@ class ChartManager {
             // Data already formatted with datasets
             datasets = data.datasets;
             labels = data.labels || [];
+        } else if (data.emotions && typeof data.emotions === 'object') {
+            // New format: { labels: [], emotions: { emotion1: [], emotion2: [] } }
+            labels = data.labels || [];
+
+            // Color palette for emotions
+            const colorPalette = [
+                '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B',
+                '#EF4444', '#14B8A6', '#6366F1', '#A855F7', '#F97316',
+                '#84CC16', '#06B6D4', '#D946EF', '#FBBF24', '#FB923C'
+            ];
+
+            const emotionColorMap = {
+                'joy': '#10B981',
+                'love': '#EC4899',
+                'admiration': '#8B5CF6',
+                'anger': '#EF4444',
+                'fear': '#6366F1',
+                'sadness': '#3B82F6',
+                'surprise': '#F59E0B',
+                'neutral': '#6B7280',
+                'excitement': '#FBBF24',
+                'gratitude': '#10B981',
+                'confusion': '#A855F7',
+                'curiosity': '#3B82F6',
+                'disappointment': '#EF4444',
+                'nervousness': '#F59E0B',
+                'disgust': '#84CC16',
+                'annoyance': '#F97316'
+            };
+
+            let colorIndex = 0;
+            datasets = Object.entries(data.emotions).map(([emotion, emotionData]) => {
+                const color = emotionColorMap[emotion] || colorPalette[colorIndex % colorPalette.length];
+                colorIndex++;
+
+                return {
+                    label: emotion.charAt(0).toUpperCase() + emotion.slice(1),
+                    data: emotionData,
+                    borderColor: color,
+                    backgroundColor: color + '20', // 20 = 12% opacity
+                    tension: 0.4,
+                    pointBackgroundColor: color,
+                    pointBorderColor: '#FFFFFF',
+                    pointBorderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    fill: true,
+                    borderWidth: 2
+                };
+            });
         } else {
-            // Build datasets from emotion keys
+            // Old format: { labels: [], joy: [], admiration: [], ... }
             const emotionColors = {
                 joy: { color: '#DA6CFF', label: 'Joy' },
                 admiration: { color: '#7C3AED', label: 'Admiration' },
@@ -278,12 +328,12 @@ class ChartManager {
 
             datasets = Object.keys(emotionColors).map(emotion => {
                 const emotionData = data[emotion] || [];
-                
+
                 return {
                     label: emotionColors[emotion].label,
                     data: emotionData,
                     borderColor: emotionColors[emotion].color,
-                    backgroundColor: emotionColors[emotion].color + '20', // 20 = 12% opacity
+                    backgroundColor: emotionColors[emotion].color + '20',
                     tension: 0.4,
                     pointBackgroundColor: emotionColors[emotion].color,
                     pointBorderColor: '#FFFFFF',
@@ -293,7 +343,7 @@ class ChartManager {
                     fill: true
                 };
             });
-            
+
             labels = data.labels || [];
         }
 

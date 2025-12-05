@@ -1,0 +1,32 @@
+%% Data Flow Diagram - Level 1 (Major processes)
+
+flowchart LR
+    subgraph Frontend
+        FE[Web UI]
+    end
+
+    subgraph Backend
+        API[API Router]
+        Auth[Auth Service]
+        OAuth[OAuth Handler]
+        Ingest[Ingestion Service]
+        Preproc[Preprocessor]
+        Enc[Token Encryption]
+    end
+
+    DB[(Database)]
+    Twitter[Twitter API]
+
+    FE -->|login/register| API
+    FE -->|initiate oauth| OAuth
+    OAuth -->|redirect| Twitter
+    Twitter -->|callback| OAuth
+    OAuth -->|store tokens| Enc
+    Enc -->|store encrypted| DB
+
+    API --> Ingest
+    Ingest --> Twitter
+    Twitter -->|tweets/replies| Ingest
+    Ingest --> Preproc
+    Preproc --> DB
+

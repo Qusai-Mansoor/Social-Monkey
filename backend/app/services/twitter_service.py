@@ -337,24 +337,30 @@ class TwitterService:
         
         
         posts_created = 0
-        
+
         if tweets and tweets.data:
             for tweet in tweets.data:
-                # Skip if this is a reply to someone else's tweet
-                if tweet.in_reply_to_user_id and str(tweet.in_reply_to_user_id) != social_account.platform_user_id:
+                # Skip if this is a reply to anyone (including self-replies)
+                # We only want original posts here, not replies
+                if tweet.in_reply_to_user_id:
                     continue
-                
+
                 # Check if post already exists
                 existing_post = db.query(Post).filter(
                     Post.platform_post_id == str(tweet.id)
                 ).first()
-                
+
                 if existing_post:
+                    # Update existing post metrics (likes, retweets, replies)
+                    existing_post.likes_count = tweet.public_metrics.get('like_count', 0) if tweet.public_metrics else 0
+                    existing_post.retweets_count = tweet.public_metrics.get('retweet_count', 0) if tweet.public_metrics else 0
+                    existing_post.replies_count = tweet.public_metrics.get('reply_count', 0) if tweet.public_metrics else 0
+                    existing_post.updated_at = datetime.now()
                     continue
-                
+
                 # Preprocess content
                 preprocessed_text, language = text_preprocessor.preprocess(tweet.text)
-                
+
                 # Module 2 & 3: Analyze Emotion and Slang
                 # We use the raw text for emotion analysis to capture nuance
                 emotion_result = analyze_emotion(tweet.text)
@@ -379,10 +385,10 @@ class TwitterService:
                     sentiment_score=emotion_result["sentiment_score"],
                     detected_slang=slang_result
                 )
-                
+
                 db.add(post)
                 posts_created += 1
-            
+
             try:
                 db.commit()
                 print(f"Successfully created {posts_created} posts")
@@ -392,7 +398,7 @@ class TwitterService:
                 return {"posts_created": 0, "error": f"Database error: {str(e)}"}
         else:
             print("No tweets found or empty response")
-        
+
         return {"posts_created": posts_created}
     
     async def fetch_tweet_replies(
@@ -417,8 +423,9 @@ class TwitterService:
         )
         print("Tweepy client created for fetching replies")
         #print("Rate limit status:", client.rate_limit_status()['resources'])
-        # Search for replies
-        query = f"conversation_id:{post.platform_post_id}"
+        # Search for replies using the correct Twitter API v2 syntax
+        # We search for tweets that are replies to this specific tweet ID
+        query = f"to:{social_account.platform_username} in_reply_to_tweet_id:{post.platform_post_id}"
         
         try:
             # Check rate limits before making the request
@@ -456,35 +463,42 @@ class TwitterService:
         
         try:
             if replies and replies.data:
+                # Get author data if available
+                author_data = {}
+                if replies.includes and 'users' in replies.includes:
+                    for user in replies.includes['users']:
+                        author_data[str(user.id)] = user.username
+
                 for reply in replies.data:
-                    # Only process if it's actually a reply to the original post
-                # or a reply in the same thread
-                    if (str(reply.in_reply_to_user_id) != social_account.platform_user_id or 
-                        str(reply.conversation_id) != post.platform_post_id):
-                        continue
-                    
                     # Skip if it's the original tweet
                     if str(reply.id) == post.platform_post_id:
                         continue
-                    
+
+                    # Only process if it's in the same conversation thread
+                    if str(reply.conversation_id) != post.platform_post_id:
+                        continue
+
                     # Check if comment already exists
                     existing_comment = db.query(Comment).filter(
                         Comment.platform_comment_id == str(reply.id)
                     ).first()
-                    
+
                     if existing_comment:
+                        # Update existing comment metrics
+                        existing_comment.likes_count = reply.public_metrics.get('like_count', 0) if reply.public_metrics else 0
+                        existing_comment.updated_at = datetime.now()
                         continue
-                    
+
                     # Preprocess content
                     preprocessed_text, language = text_preprocessor.preprocess(reply.text)
-                    
+
                     # Module 2 & 3: Analyze Emotion and Slang
                     emotion_result = analyze_emotion(reply.text)
                     slang_result = slang_detector.detect(reply.text)
 
-                    # Get author username (you may need to fetch user details)
-                    author_username = f"user_{reply.author_id}"
-                    
+                    # Get author username from expanded data or fallback
+                    author_username = author_data.get(str(reply.author_id), f"user_{reply.author_id}")
+
                     # Create comment
                     comment = Comment(
                         post_id=post.id,
@@ -503,20 +517,20 @@ class TwitterService:
                         sentiment_score=emotion_result["sentiment_score"],
                         detected_slang=slang_result
                     )
-                    
+
                     db.add(comment)
                     comments_created += 1
-                
+
                 db.commit()
-                print(f"Successfully created {comments_created} comments")
+                print(f"Successfully created {comments_created} comments for post {post.id}")
             else:
                 print("No replies found")
-            
+
         except Exception as e:
             db.rollback()
             print(f"Error processing replies: {e}")
             return 0
-        
+
         return comments_created
 
 

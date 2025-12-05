@@ -1,0 +1,31 @@
+%% Data Flow Diagram - Level 2 (Detailed ingestion flow)
+
+flowchart LR
+    User[User]
+    FE[Frontend]
+    API[Backend API]
+    SA[SocialAccount]
+    TAPI[Twitter API]
+    PostsDB[(posts table)]
+    CommentsDB[(comments table)]
+    OAuthDB[(oauth_states table)]
+    Enc[Encryption Service]
+    Preproc[TextPreprocessor]
+
+    User -->|click ingest| FE
+    FE -->|POST /data/ingest/{account_id}| API
+    API -->|SELECT SocialAccount| SA
+    API -->|decrypt token| Enc
+    API -->|GET tweets| TAPI
+    TAPI -->|list of tweets| API
+    API -->|insert new posts| PostsDB
+    loop For each post
+        API -->|search replies| TAPI
+        TAPI -->|replies| API
+        API -->|insert comments| CommentsDB
+        API -->|call preprocess| Preproc
+        Preproc -->|update| PostsDB
+        Preproc -->|update| CommentsDB
+    end
+    API -->|return stats| FE
+

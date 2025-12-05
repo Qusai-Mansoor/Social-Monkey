@@ -1,0 +1,71 @@
+%% Sequence Diagram - OAuth Connection & Data Ingestion Flow
+%% Shows interaction between objects for connecting social account and syncing data
+
+sequenceDiagram
+    title SocialMonkey - OAuth Connection & Data Sync Flow
+    
+    actor User
+    participant Frontend as Application<br/>Interface
+    participant AuthController as Auth<br/>Controller
+    participant OAuthController as OAuth<br/>Controller
+    participant TwitterService as Twitter<br/>Service
+    participant EmotionEngine as Emotion<br/>Engine
+    participant SlangDetector as Slang<br/>Detector
+    participant Database as Database
+    
+    %% OAuth Flow
+    User->>Frontend: Click "Connect Twitter"
+    Frontend->>OAuthController: GET /oauth/twitter/url
+    OAuthController->>TwitterService: get_oauth_url()
+    TwitterService->>TwitterService: generate_code_verifier()
+    TwitterService->>Database: store OAuthState
+    Database-->>TwitterService: confirmation
+    TwitterService-->>OAuthController: authorization_url
+    OAuthController-->>Frontend: OAuth URL
+    Frontend->>User: Redirect to Twitter
+    
+    User->>TwitterService: Authorize (on Twitter)
+    TwitterService->>OAuthController: callback(code, state)
+    OAuthController->>TwitterService: handle_callback(code, state)
+    TwitterService->>Database: verify OAuthState
+    Database-->>TwitterService: state_valid
+    TwitterService->>TwitterService: exchange_code_for_token()
+    TwitterService->>Database: store encrypted tokens
+    Database-->>TwitterService: SocialAccount created
+    TwitterService-->>OAuthController: account_connected
+    OAuthController-->>Frontend: success response
+    Frontend->>User: Display "Connected Successfully"
+    
+    %% Data Sync Flow
+    User->>Frontend: Click "Sync Data"
+    Frontend->>AuthController: POST /ingestion/ingest/{account_id}
+    AuthController->>Database: verify user owns account
+    Database-->>AuthController: authorized
+    AuthController->>TwitterService: fetch_user_tweets(account)
+    TwitterService->>TwitterService: decrypt_tokens()
+    TwitterService->>TwitterService: fetch posts from Twitter API
+    
+    loop For each post
+        TwitterService->>EmotionEngine: analyze(post.content)
+        EmotionEngine-->>TwitterService: emotion_profile
+        TwitterService->>SlangDetector: detect(post.content)
+        SlangDetector-->>TwitterService: slang_profile
+        TwitterService->>Database: store Post with analysis
+        Database-->>TwitterService: post_saved
+        
+        alt Post has replies
+            TwitterService->>TwitterService: fetch_tweet_replies(post_id)
+            loop For each comment
+                TwitterService->>EmotionEngine: analyze(comment.content)
+                EmotionEngine-->>TwitterService: emotion_profile
+                TwitterService->>SlangDetector: detect(comment.content)
+                SlangDetector-->>TwitterService: slang_profile
+                TwitterService->>Database: store Comment with analysis
+                Database-->>TwitterService: comment_saved
+            end
+        end
+    end
+    
+    TwitterService-->>AuthController: ingestion_stats
+    AuthController-->>Frontend: sync_complete
+    Frontend->>User: Display "Data Synced Successfully"

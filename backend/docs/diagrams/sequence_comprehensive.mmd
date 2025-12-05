@@ -1,0 +1,190 @@
+%% Comprehensive Sequence Diagram - SocialMonkey Complete User Journey
+%% Shows complete flow: Registration → Login → OAuth Connection → Data Sync → Analytics
+%% Combines authentication, OAuth, and data ingestion in one comprehensive view
+
+sequenceDiagram
+    title SocialMonkey - Complete User Journey
+    
+    actor User
+    participant Frontend as Application<br/>Interface
+    participant AuthController as Auth<br/>Controller
+    participant SecurityManager as Security<br/>Manager
+    participant OAuthController as OAuth<br/>Controller
+    participant TwitterService as Twitter<br/>Service
+    participant TextProcessor as Text<br/>Processor
+    participant EmotionEngine as Emotion<br/>Engine
+    participant SlangDetector as Slang<br/>Detector
+    participant Database as Database
+    
+    %% ========================================
+    %% PHASE 1: USER REGISTRATION
+    %% ========================================
+    rect rgb(230, 245, 255)
+        Note over User,Database: PHASE 1: User Registration
+        User->>Frontend: Navigate to SocialMonkey
+        Frontend->>User: Show Landing Page (Login/Register)
+        User->>Frontend: Click "Register" + Enter details
+        Frontend->>AuthController: POST /auth/register
+        AuthController->>SecurityManager: get_password_hash(password)
+        SecurityManager-->>AuthController: hashed_password
+        AuthController->>Database: create User record
+        
+        alt Registration Success
+            Database-->>AuthController: user_created
+            AuthController->>SecurityManager: create_access_token(user_id)
+            SecurityManager-->>AuthController: jwt_token
+            AuthController-->>Frontend: {token, user_data}
+            Frontend->>User: Redirect to Dashboard
+        else Registration Failed
+            Database-->>AuthController: error (duplicate email/username)
+            AuthController-->>Frontend: error: User already exists
+            Frontend->>User: Display error, stay on registration
+        end
+    end
+    
+    %% ========================================
+    %% PHASE 2: USER LOGIN (Alternative Flow)
+    %% ========================================
+    rect rgb(255, 245, 230)
+        Note over User,Database: PHASE 2: User Login (Returning Users)
+        User->>Frontend: Click "Login" + Enter credentials
+        Frontend->>AuthController: POST /auth/login
+        AuthController->>Database: query User by email
+        Database-->>AuthController: user_record
+        AuthController->>SecurityManager: verify_password(plain, hashed)
+        SecurityManager-->>AuthController: password_valid
+        
+        alt Password Valid
+            AuthController->>SecurityManager: create_access_token(user_id)
+            SecurityManager-->>AuthController: jwt_token
+            AuthController-->>Frontend: {token, user_data}
+            Frontend->>User: Redirect to Dashboard
+        else Password Invalid
+            AuthController-->>Frontend: error: Invalid credentials
+            Frontend->>User: Display error, return to Landing
+        end
+    end
+    
+    %% ========================================
+    %% PHASE 3: OAUTH CONNECTION
+    %% ========================================
+    rect rgb(245, 255, 230)
+        Note over User,Database: PHASE 3: Connect Social Media Account
+        User->>Frontend: Click "Connect Twitter Account"
+        Frontend->>OAuthController: GET /oauth/twitter/url
+        OAuthController->>TwitterService: get_oauth_url()
+        TwitterService->>TwitterService: generate_code_verifier() (PKCE)
+        TwitterService->>Database: store OAuthState(state, verifier)
+        Database-->>TwitterService: state_saved
+        TwitterService-->>OAuthController: authorization_url
+        OAuthController-->>Frontend: OAuth URL
+        Frontend->>User: Redirect to Twitter
+        
+        User->>TwitterService: Authorize on Twitter
+        
+        alt User Approves OAuth
+            TwitterService->>OAuthController: callback(code, state)
+            OAuthController->>TwitterService: handle_callback(code, state)
+            TwitterService->>Database: verify OAuthState
+            Database-->>TwitterService: state_valid
+            TwitterService->>TwitterService: exchange_code_for_token()
+            TwitterService->>TwitterService: encrypt_tokens()
+            TwitterService->>Database: create SocialAccount(encrypted tokens)
+            Database-->>TwitterService: account_created
+            TwitterService-->>OAuthController: account_connected
+            OAuthController-->>Frontend: success response
+            Frontend->>User: Display "Twitter Connected Successfully"
+        else User Denies OAuth
+            TwitterService->>OAuthController: callback(error=access_denied)
+            OAuthController-->>Frontend: error: OAuth denied
+            Frontend->>User: Display "Connection Cancelled"
+        end
+    end
+    
+    %% ========================================
+    %% PHASE 4: DATA SYNCHRONIZATION
+    %% ========================================
+    rect rgb(255, 240, 245)
+        Note over User,Database: PHASE 4: Sync Social Media Data
+        User->>Frontend: Click "Sync Data" button
+        Frontend->>AuthController: POST /ingestion/ingest/{account_id}<br/>(with JWT token)
+        AuthController->>SecurityManager: verify_token(token)
+        SecurityManager-->>AuthController: user_id
+        AuthController->>Database: verify user owns account
+        Database-->>AuthController: ownership_confirmed
+        AuthController->>TwitterService: fetch_user_tweets(account)
+        TwitterService->>TwitterService: decrypt_tokens()
+        TwitterService->>TwitterService: API call to Twitter (fetch posts)
+        
+        alt API Success
+            loop For each post (max 20)
+                TwitterService->>TextProcessor: preprocess(post.content)
+                TextProcessor-->>TwitterService: cleaned_text, language
+                TwitterService->>EmotionEngine: analyze(cleaned_text)
+                EmotionEngine-->>TwitterService: {emotion_scores, dominant_emotion, sentiment}
+                TwitterService->>SlangDetector: detect(cleaned_text)
+                SlangDetector-->>TwitterService: {detected_slang, meanings}
+                TwitterService->>Database: create/update Post with analysis
+                Database-->>TwitterService: post_saved
+                
+                alt Post has replies
+                    TwitterService->>TwitterService: fetch_tweet_replies(post_id, username)
+                    loop For each comment
+                        TwitterService->>TextProcessor: preprocess(comment.content)
+                        TextProcessor-->>TwitterService: cleaned_text
+                        TwitterService->>EmotionEngine: analyze(cleaned_text)
+                        EmotionEngine-->>TwitterService: emotion_analysis
+                        TwitterService->>SlangDetector: detect(cleaned_text)
+                        SlangDetector-->>TwitterService: slang_data
+                        TwitterService->>Database: create Comment with analysis
+                        Database-->>TwitterService: comment_saved
+                    end
+                end
+            end
+            
+            TwitterService-->>AuthController: {posts_synced: 15, comments_synced: 42}
+            AuthController-->>Frontend: sync_complete
+            Frontend->>User: Display "Data Synced: 15 posts, 42 comments"
+        else API Rate Limited
+            TwitterService-->>AuthController: error: Rate limit exceeded
+            AuthController-->>Frontend: error: Please wait 15 minutes
+            Frontend->>User: Display rate limit message
+        end
+    end
+    
+    %% ========================================
+    %% PHASE 5: VIEW ANALYTICS
+    %% ========================================
+    rect rgb(240, 255, 245)
+        Note over User,Database: PHASE 5: View Analytics Dashboard
+        User->>Frontend: Navigate to Analytics
+        Frontend->>AuthController: GET /analytics/overview<br/>(with JWT token)
+        AuthController->>SecurityManager: verify_token(token)
+        SecurityManager-->>AuthController: user_id
+        AuthController->>Database: get user's social accounts
+        Database-->>AuthController: accounts_list
+        AuthController->>Database: get posts with emotion/slang data
+        Database-->>AuthController: posts_with_analysis
+        AuthController->>Database: get comments with analysis
+        Database-->>AuthController: comments_data
+        AuthController->>AuthController: calculate_aggregated_analytics()
+        AuthController-->>Frontend: {emotion_trends, slang_stats, top_posts, engagement}
+        Frontend->>User: Display interactive dashboard
+        
+        User->>Frontend: Filter by "Joy" emotion
+        Frontend->>AuthController: GET /analytics/posts?emotion=joy
+        AuthController->>Database: query posts WHERE dominant_emotion='joy'
+        Database-->>AuthController: filtered_posts
+        AuthController-->>Frontend: joy_posts_data
+        Frontend->>User: Display filtered results
+    end
+    
+    %% ========================================
+    %% PHASE 6: LOGOUT
+    %% ========================================
+    rect rgb(250, 250, 250)
+        Note over User,Frontend: PHASE 6: User Logout
+        User->>Frontend: Click "Logout"
+        Frontend->>Frontend: clear JWT token from storage
+        Frontend->>User: Redirect to Landing Page
+    end
