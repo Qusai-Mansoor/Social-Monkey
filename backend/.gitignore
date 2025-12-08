@@ -69,14 +69,38 @@ alembic/versions/*.pyc
 .uv/
 uv.lock
 
-# Hugging Face Models (large files)
-models/
+# ML/NLP Models (large files)
+# BERTweet emotion model
+models/bertweet_goemotions/*
+!models/bertweet_goemotions/.gitkeep
+
+# spaCy NER slang detection model
+models/slang_ner_model/*
+!models/slang_ner_model/.gitkeep
+
+# General model files
+models/*
+!models/.gitkeep
+!models/README.md
 *.bin
 *.pt
 *.pth
 *.safetensors
 *.h5
 *.onnx
+*.msgpack
+*.pb
+training_args.bin
+
+# Model-specific files
+bpe.codes
+vocab.txt
+added_tokens.json
+tokenizer.json
+sentencepiece.bpe.model
+config.cfg
+meta.json
+metrics.json
 
 # OAuth secrets and tokens
 oauth_state.json
@@ -87,3 +111,6 @@ twitter_rate_limits.json
 *.tmp
 *.bak
 *.cache
+
+# Test outputs
+test_execution_report.txt

@@ -83,10 +83,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Get client IP
         client_ip = request.client.host
         
-        # Skip rate limiting for localhost in development
-        if client_ip in ["127.0.0.1", "::1", "localhost"]:
-            return await call_next(request)
-        
         # Check if IP is currently blocked
         if client_ip in self.blocked_ips:
             if datetime.now() < self.blocked_ips[client_ip]:
