@@ -1,49 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard - Social Monkey</title>
-    <link rel="icon" type="image/x-icon" href="/static/assets/icons/Main.ico">
-    
+    <link rel="icon" type="image/x-icon" href="/static/assets/icons/Main.ico" />
+
     <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
-    
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Font Awesome -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+
     <!-- Styles -->
-    <link rel="stylesheet" href="/static/css/dashboard.css">
-    <link rel="stylesheet" href="/static/css/sidebar.css">
-    <link rel="stylesheet" href="/static/css/dashboard-components.css">
-    
+    <link rel="stylesheet" href="/static/css/dashboard.css" />
+    <link rel="stylesheet" href="/static/css/sidebar.css" />
+    <link rel="stylesheet" href="/static/css/dashboard-components.css" />
+    <link rel="stylesheet" href="/static/css/dashboards/overview.css" />
+    <link rel="stylesheet" href="/static/css/dashboards/post-comments.css" />
+
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
-</head>
-<body>
+  </head>
+  <body>
     <!-- Navigation Progress Bar -->
     <div class="nav-progress" id="navProgress">
-        <div class="nav-progress-bar" id="navProgressBar"></div>
+      <div class="nav-progress-bar" id="navProgressBar"></div>
     </div>
 
     <!-- Dashboard Layout -->
     <div class="dashboard-layout">
-        <!-- Sidebar (will be populated by sidebar.js) -->
-        <aside class="sidebar" id="sidebar"></aside>
+      <!-- Sidebar (will be populated by sidebar.js) -->
+      <aside class="sidebar" id="sidebar"></aside>
 
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <div id="main-content" class="content-area">
-                <!-- Dashboard content loaded dynamically -->
-            </div>
-        </main>
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <div id="main-content" class="content-area">
+          <!-- Dashboard content loaded dynamically -->
+        </div>
+      </main>
     </div>
 
     <!-- Loading Overlay -->
-    <div id="loading-overlay" class="loading-overlay" style="display: none;">
-        <div class="loading-spinner">
-            <div class="spinner"></div>
-            <p>Loading dashboard...</p>
-        </div>
+    <div id="loading-overlay" class="loading-overlay" style="display: none">
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p>Loading dashboard...</p>
+      </div>
     </div>
 
     <!-- Scripts -->
@@ -52,16 +63,28 @@
     <script type="module" src="/static/js/components/data-loader.js"></script>
     <script type="module" src="/static/js/components/chart-manager.js"></script>
     <script type="module" src="/static/js/components/stat-cards.js"></script>
-    <script type="module" src="/static/js/components/filter-manager.js"></script>
+    <script
+      type="module"
+      src="/static/js/components/filter-manager.js"
+    ></script>
     <script type="module" src="/static/js/components/auto-refresh.js"></script>
     <script type="module" src="/static/js/components/filter-panel.js"></script>
     <script type="module" src="/static/js/dashboards/overview.js"></script>
-    <script type="module" src="/static/js/dashboards/emotion-dashboard.js"></script>
-    <script type="module" src="/static/js/dashboards/negative-triggers.js"></script>
-    <script type="module" src="/static/js/dashboards/heatmap-analysis.js"></script>
+    <script
+      type="module"
+      src="/static/js/dashboards/emotion-dashboard.js"
+    ></script>
+    <script
+      type="module"
+      src="/static/js/dashboards/negative-triggers.js"
+    ></script>
+    <script
+      type="module"
+      src="/static/js/dashboards/heatmap-analysis.js"
+    ></script>
     <script type="module" src="/static/js/dashboards/genz-insights.js"></script>
+    <script type="module" src="/static/js/dashboards/post-comments.js"></script>
     <script type="module" src="/static/js/sidebar.js"></script>
     <script type="module" src="/static/js/dashboard.js"></script>
-</body>
+  </body>
 </html>
-

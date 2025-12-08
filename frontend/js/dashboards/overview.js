@@ -264,6 +264,7 @@ class OverviewDashboard {
     const commentButtons = document.querySelectorAll(".btn-view-comments");
     commentButtons.forEach((btn) => {
       btn.addEventListener("click", async (e) => {
+        e.preventDefault();
         e.stopPropagation(); // Prevent card click
         const postId = btn.dataset.postId;
         await this.viewPostComments(postId);
@@ -307,33 +308,10 @@ class OverviewDashboard {
    * View post comments
    */
   async viewPostComments(postId) {
-    try {
-      // Show loading state
-      this.showCommentsModal(postId, null, true);
-
-      // Fetch comments from API
-      const response = await fetch(
-        `/api/v1/analytics/post-comments/${postId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch comments");
-      }
-
-      const data = await response.json();
-
-      // Show comments modal with data
-      this.showCommentsModal(postId, data, false);
-    } catch (error) {
-      console.error("Error fetching comments:", error);
-      this.showError("Failed to load comments. Please try again.");
-      this.closeCommentsModal();
-    }
+    console.log("viewPostComments called with postId:", postId);
+    // Navigate to comments view page
+    window.location.hash = `post-comments/${postId}`;
+    console.log("Hash set to:", window.location.hash);
   }
 
   showCommentsModal(postId, data, isLoading) {
@@ -895,6 +873,15 @@ class OverviewDashboard {
       curiosity: { icon: "🤔", color: "#3B82F6" },
       realization: { icon: "💡", color: "#FBBF24" },
     };
+  }
+
+  /**
+   * Get emotion icon for a specific emotion
+   */
+  getEmotionIcon(emotion) {
+    if (!emotion) return "😐";
+    const metadata = this.getEmotionMetadata();
+    return metadata[emotion.toLowerCase()]?.icon || "😐";
   }
 
   /**
