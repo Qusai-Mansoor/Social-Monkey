@@ -35,8 +35,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "img-src 'self' data: https:; "
             # Allow fonts from self, Google Fonts, Font Awesome CDN, and data URIs
             "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
-            # Allow connections to self and social media APIs
-            "connect-src 'self' https://api.twitter.com https://graph.instagram.com; "
+            # Allow connections to self, social media APIs, and CDN source maps
+            "connect-src 'self' https://api.twitter.com https://graph.instagram.com https://cdn.jsdelivr.net; "
             # Prevent framing
             "frame-ancestors 'none';"
         )
@@ -68,7 +68,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Implements token bucket algorithm
     """
     
-    def __init__(self, app: ASGIApp, requests_per_minute: int = 60):
+    def __init__(self, app: ASGIApp, requests_per_minute: int = 300):  # Increased for development
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
         self.requests = defaultdict(list)
@@ -82,6 +82,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         
         # Get client IP
         client_ip = request.client.host
+        
+        # Skip rate limiting for localhost in development
+        if client_ip in ["127.0.0.1", "::1", "localhost"]:
+            return await call_next(request)
         
         # Check if IP is currently blocked
         if client_ip in self.blocked_ips:

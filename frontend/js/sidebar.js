@@ -4,47 +4,67 @@
  */
 
 // Check authentication
-if (!localStorage.getItem('access_token')) {
-    window.location.href = '/login';
+console.log("=== SIDEBAR.JS LOADING ===");
+console.log("Checking access_token:", localStorage.getItem("access_token"));
+console.log("Checking user data:", localStorage.getItem("user"));
+console.log("========================");
+
+if (!localStorage.getItem("access_token")) {
+  console.warn("No access_token found, redirecting to login");
+  window.location.href = "/login";
 }
 
 class SidebarController {
-    constructor() {
-        this.currentPage = 'overview';
-        this.user = null;
+  constructor() {
+    this.currentPage = "overview";
+    this.user = null;
+  }
+
+  async init() {
+    await this.loadUserInfo();
+  }
+
+  async loadUserInfo() {
+    try {
+      // Get user info from localStorage (stored during login)
+      const userDataString = localStorage.getItem("user");
+      console.log("Loading user data from localStorage:", userDataString);
+
+      if (userDataString) {
+        const userData = JSON.parse(userDataString);
+        console.log("Parsed user data:", userData);
+
+        this.user = {
+          name: userData.username || userData.email || "User",
+          email: userData.email || "",
+          workspace: "My Workspace",
+        };
+
+        console.log("User object set to:", this.user);
+      } else {
+        // Fallback to default user if not found
+        console.warn("No user data found in localStorage");
+        this.user = {
+          name: "User",
+          email: "",
+          workspace: "My Workspace",
+        };
+      }
+    } catch (error) {
+      console.error("Error loading user info:", error);
+      this.user = {
+        name: "User",
+        email: "",
+        workspace: "My Workspace",
+      };
     }
+  }
 
-    async init() {
-        await this.loadUserInfo();
-    }
+  renderSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    if (!sidebar) return;
 
-    async loadUserInfo() {
-        try {
-            // Try to get user info from localStorage or API
-            const userInfo = localStorage.getItem('user_info');
-            if (userInfo) {
-                this.user = JSON.parse(userInfo);
-            } else {
-                // Fallback to default user
-                this.user = {
-                    name: 'User',
-                    workspace: 'My Workspace'
-                };
-            }
-        } catch (error) {
-            console.error('Error loading user info:', error);
-            this.user = {
-                name: 'User',
-                workspace: 'My Workspace'
-            };
-        }
-    }
-
-    renderSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        if (!sidebar) return;
-
-        sidebar.innerHTML = `
+    sidebar.innerHTML = `
             <!-- Sidebar Header -->
             <div class="sidebar-header">
                 <div class="sidebar-logo">
@@ -120,60 +140,60 @@ class SidebarController {
                 </div>
             </div>
         `;
+  }
+
+  attachEventListeners() {
+    // Navigation click handlers
+    const navItems = document.querySelectorAll(".nav-item");
+    navItems.forEach((item) => {
+      item.addEventListener("click", (e) => {
+        e.preventDefault();
+        const page = item.dataset.page;
+        this.navigateTo(page);
+      });
+    });
+
+    // User profile click handler
+    const userProfile = document.getElementById("userProfile");
+    if (userProfile) {
+      userProfile.addEventListener("click", () => {
+        window.location.href = "#settings";
+      });
+    }
+  }
+
+  navigateTo(page) {
+    // Update active state
+    document.querySelectorAll(".nav-item").forEach((item) => {
+      item.classList.remove("active");
+    });
+
+    const activeItem = document.querySelector(`[data-page="${page}"]`);
+    if (activeItem) {
+      activeItem.classList.add("active");
     }
 
-    attachEventListeners() {
-        // Navigation click handlers
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const page = item.dataset.page;
-                this.navigateTo(page);
-            });
-        });
+    // Store current page
+    this.currentPage = page;
 
-        // User profile click handler
-        const userProfile = document.getElementById('userProfile');
-        if (userProfile) {
-            userProfile.addEventListener('click', () => {
-                window.location.href = '#settings';
-            });
-        }
+    // Update URL hash
+    window.location.hash = page;
+
+    // Trigger page load event
+    const event = new CustomEvent("pageChange", {
+      detail: { page },
+    });
+    document.dispatchEvent(event);
+  }
+
+  showUserMenu() {
+    // Simple logout for now
+    if (confirm("Do you want to logout?")) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("user_info");
+      window.location.href = "/login";
     }
-
-    navigateTo(page) {
-        // Update active state
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        
-        const activeItem = document.querySelector(`[data-page="${page}"]`);
-        if (activeItem) {
-            activeItem.classList.add('active');
-        }
-
-        // Store current page
-        this.currentPage = page;
-
-        // Update URL hash
-        window.location.hash = page;
-
-        // Trigger page load event
-        const event = new CustomEvent('pageChange', { 
-            detail: { page } 
-        });
-        document.dispatchEvent(event);
-    }
-
-    showUserMenu() {
-        // Simple logout for now
-        if (confirm('Do you want to logout?')) {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('user_info');
-            window.location.href = '/login';
-        }
-    }
+  }
 }
 
 // Export for use in other modules

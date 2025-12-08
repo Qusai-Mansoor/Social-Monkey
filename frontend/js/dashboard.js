@@ -244,19 +244,22 @@ class DashboardApp {
    * Get initial page to load
    */
   getInitialPage() {
-    // Priority 1: Check URL hash
+    // Priority 1: Check URL hash (most important - respects direct navigation)
     const hashPage = this.getPageFromHash();
     if (hashPage && this.isValidRoute(hashPage)) {
+      console.log("Loading page from URL hash:", hashPage);
       return hashPage;
     }
 
-    // Priority 2: Check last visited page from localStorage
+    // Priority 2: Check last visited page from localStorage (only if no hash)
     const lastPage = localStorage.getItem("lastVisitedPage");
     if (lastPage && this.isValidRoute(lastPage)) {
+      console.log("Loading last visited page:", lastPage);
       return lastPage;
     }
 
     // Priority 3: Default to overview
+    console.log("Loading default page: overview");
     return "overview";
   }
 
