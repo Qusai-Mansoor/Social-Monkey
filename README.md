@@ -1,43 +1,127 @@
 # Social-Monkey 🐵
 
-An emotion-aware social media analytics platform that analyzes user-authorized comments and social media posts to provide emotional insights, engagement forecasting, and comprehensive analytics dashboards.
+An AI-driven emotion-aware social media analytics platform that provides deep sentiment analysis, Gen-Z slang interpretation, and comprehensive engagement insights for Twitter/X content.
 
-## 🎉 Project Status: **COMPLETE** ✅
+## 📖 Overview
 
-All 4 implementation phases completed successfully!
+**Social Monkey** is a web-based application designed as an emotion-aware social media assistant that analyzes user-authorized posts and comments from Twitter (X). The platform leverages advanced transformer-based AI models (BERTweet fine-tuned on GoEmotions) to detect 27 fine-grained emotions, interpret Gen-Z slang, and provide actionable analytics through interactive dashboards.
 
-- ✅ **Phase 1**: Foundation & Core Dashboards
-- ✅ **Phase 2**: Navigation & Routing
-- ✅ **Phase 3**: Individual Dashboard Modules
-- ✅ **Phase 4**: Advanced Features
+### Key Highlights
+
+- 🎯 **27 Fine-Grained Emotions**: Beyond basic sentiment (positive/negative), detects emotions like admiration, amusement, confusion, gratitude, sarcasm, remorse, nervousness, and more
+- 🤖 **AI-Powered Analysis**: Fine-tuned BERTweet model (135M parameters) with 0.43-0.46 Macro F1 score on GoEmotions benchmark
+- 💬 **Gen-Z Slang Detection**: Dictionary-based system identifying 70+ slang terms (no cap, bussin, slaps, fr, ngl, etc.)
+- 📊 **5 Interactive Dashboards**: Overview, Emotion Analysis, Negative Triggers, Heatmap Analysis, Gen-Z Insights
+- 🔐 **Secure OAuth 2.0**: Twitter integration with PKCE flow for safe account access
+- 🌙 **Beautiful Dark Theme**: Modern UI with smooth animations and responsive design
+
+---
 
 ## 🚀 Tech Stack
 
 ### Backend
 
-- **Framework**: FastAPI (Python 3.8+)
-- **Database**: PostgreSQL / SQLite
-- **ORM**: SQLAlchemy
-- **Authentication**: JWT + OAuth 2.0
-- **API Docs**: Swagger/ReDoc
+- **Framework**: FastAPI (Python 3.9+)
+- **AI/ML**:
+  - Transformers 4.35.0 (Hugging Face)
+  - BERTweet-base fine-tuned on GoEmotions dataset
+  - PyTorch for model inference
+- **Database**: PostgreSQL (Supabase) / SQLite
+- **ORM**: SQLAlchemy 2.0.23
+- **Authentication**: JWT (PyJWT 2.8.0) + OAuth 2.0 PKCE
+- **Security**: Fernet encryption for tokens, bcrypt for passwords
+- **Social API**: Twitter API v2 via Tweepy 4.14.0
+- **NLP Utils**: LangDetect 1.0.9, Emoji 2.8.0
+- **Testing**: pytest with 83 test cases (100% pass rate)
 
 ### Frontend
 
-- **JavaScript**: Vanilla ES6 Modules (No framework!)
+- **JavaScript**: Vanilla ES6 Modules (No framework - 10,000+ lines!)
 - **Charts**: Chart.js 4.4.0
-- **Architecture**: Single Page Application (SPA)
-- **Styling**: Custom CSS (Dark Theme)
+- **Architecture**: Single Page Application (SPA) with hash-based routing
+- **Styling**: Custom CSS (960+ lines dashboard.css, 1100+ lines components)
 - **State**: localStorage + Component Instances
+- **Features**: Auto-refresh, advanced filtering, CSV export
 
-### Features
+---
 
-- **5 Complete Dashboards** with real-time analytics
-- **Advanced Filtering System** with 8 quick presets
-- **Auto-Refresh** every 5 minutes
-- **Beautiful Dark Theme** with smooth animations
-- **Fully Responsive** design
-- **Hash-Based Routing** with browser history
-- **CSV Export** functionality
+## 🎯 Core Features
+
+### 1. Deep Emotion Analysis
+
+- **27 Emotion Categories**: Detects fine-grained emotions using BERTweet transformer
+- **Multi-label Classification**: Single text can have multiple simultaneous emotions
+- **Sentiment Scoring**: Aggregates emotions into overall polarity score
+- **Performance**: Test Macro F1: 0.43-0.46 (competitive with published SOTA: 0.469)
+
+### 2. Gen-Z Slang Interpretation
+
+- **70+ Slang Terms**: Curated dictionary with formal definitions
+- **Pattern Matching**: Regex-based word boundary detection
+- **Context-Aware**: Phrase priority matching (e.g., "no cap" before "cap")
+- **Integration**: Runs parallel with emotion analysis
+
+### 3. Interactive Dashboards
+
+- **Overview**: 6 stat cards, emotion distribution, top slang, best posts
+- **Emotion Analysis**: Multi-line trends, emotion breakdown, filterable table
+- **Negative Triggers**: Severity classification, trigger word analysis, risk scoring
+- **Heatmap Analysis**: 7×24 posting patterns, optimal time identification
+- **Gen-Z Insights**: Slang usage tracking, trend comparison, growth rates
+
+### 4. Advanced Features
+
+- **Unified Filtering**: 8 quick presets, custom date ranges, multi-platform/emotion selection
+- **Auto-Refresh**: Every 5 minutes with live countdown
+- **CSV Export**: Full data export for emotion and trigger analysis
+- **Real-time Updates**: Smart caching with manual refresh option
+
+---
+
+## 🧠 AI Model: BERTweet Fine-Tuning
+
+### Model Architecture
+
+**BERTweet-base** (vinai/bertweet-base)
+
+- Pre-trained on 850M English tweets (2012-2019)
+- 135M trainable parameters
+- 12 Transformer layers, 768 hidden dimensions, 12 attention heads
+- 64,001 BPE tokens with native emoji support
+- Max sequence length: 128 tokens
+
+### GoEmotions Dataset
+
+- **Total**: 58,009 Reddit comments
+- **Split**: 43,410 train / 5,426 validation / 5,427 test
+- **Task**: Multi-label emotion classification (27 emotions)
+- **Emotions**:
+  - Positive (12): admiration, amusement, approval, caring, desire, excitement, gratitude, joy, love, optimism, pride, relief
+  - Negative (11): anger, annoyance, disappointment, disapproval, disgust, embarrassment, fear, grief, nervousness, remorse, sadness
+  - Ambiguous (4): confusion, curiosity, realization, surprise
+
+### Training Configuration
+
+```python
+Learning Rate: 2e-5
+Batch Size: 32
+Epochs: 10 (convergence at epoch 7-8)
+Optimizer: AdamW (weight decay 0.01)
+Loss: Binary Cross-Entropy with Logits
+Threshold: 0.3 (optimal for multi-label)
+Training Time: ~50 minutes (Tesla P100 GPU)
+```
+
+### Performance Results
+
+- **Test Macro F1**: 0.43-0.46 (published SOTA: 0.469)
+- **Test Micro F1**: 0.54-0.57
+- **Best Emotions**: Gratitude (0.88), Amusement (0.76), Joy (0.72), Love (0.68)
+- **Challenging**: Nervousness (0.12), Relief (0.18), Grief (0.22)
+
+**See [bertweet_goemotions_complete_analysis.md](bertweet_goemotions_complete_analysis.md) for detailed technical analysis.**
+
+---
 
 ## 📊 Dashboards
 
@@ -81,122 +165,95 @@ All 4 implementation phases completed successfully!
 - Platform comparison
 - Growth rate tracking with badges
 
-## 🎨 Advanced Features (Phase 4)
-
-### Unified Filter Manager
-
-- **Date Ranges**: Preset (7/30/60/90/180/365 days) or custom dates
-- **Multi-Platform**: Select all, Twitter, Instagram, or combinations
-- **Multi-Emotion**: Filter by sentiment types
-- **Severity Levels**: High/medium/low engagement filtering
-- **Engagement Range**: Min/max threshold filters
-- **Sort Options**: By date, engagement, or sentiment
-- **8 Quick Presets**: One-click filter combinations
-- **localStorage Persistence**: Filters survive page reloads
-
-### Auto-Refresh System
-
-- **Automatic Updates**: Every 5 minutes (configurable)
-- **Live Countdown**: Real-time timer display
-- **Manual Refresh**: Force update anytime
-- **Smart Caching**: Efficient data management
-- **Status Indicators**: Visual feedback with animations
-
-### Filter Panel UI
-
-- **Slide-Out Panel**: Beautiful 450px side panel
-- **Quick Presets**: 8 pre-configured filters
-- **Custom Date Picker**: Select any date range
-- **Multi-Select Controls**: Checkboxes for all options
-- **Live Preview**: See active filters before applying
-- **Responsive**: Mobile-friendly design
-
-## 📁 Project Structure
-
-```
-Social-Monkey/
-├── backend/
-│   ├── app/
-│   │   ├── api/v1/endpoints/       # API endpoints
-│   │   │   ├── auth.py             # Authentication
-│   │   │   ├── analytics.py        # Analytics data
-│   │   │   ├── ingestion.py        # Data ingestion
-│   │   │   └── oauth.py            # OAuth flows
-│   │   ├── core/                   # Config & security
-│   │   ├── db/                     # Database setup
-│   │   ├── models/                 # SQLAlchemy models
-│   │   ├── schemas/                # Pydantic schemas
-│   │   ├── services/               # Business logic
-│   │   └── utils/                  # Utilities
-│   ├── alembic/                    # Migrations
-│   ├── tests/                      # Tests
-│   └── main.py                     # FastAPI app
-│
-├── frontend/
-│   ├── templates/
-│   │   └── dashboard.html          # Main SPA shell
-│   ├── css/
-│   │   ├── dashboard.css           # 960+ lines
-│   │   ├── dashboard-components.css # 1100+ lines
-│   │   └── sidebar.css             # Sidebar styles
-│   ├── js/
-│   │   ├── dashboard.js            # 700+ lines - Main app
-│   │   ├── sidebar.js              # Navigation
-│   │   ├── api.js                  # API wrapper
-│   │   ├── components/             # Reusable components
-│   │   │   ├── data-loader.js      # 200+ lines
-│   │   │   ├── chart-manager.js    # 250+ lines
-│   │   │   ├── stat-cards.js       # 150+ lines
-│   │   │   ├── filter-manager.js   # 450+ lines ⭐ NEW
-│   │   │   ├── auto-refresh.js     # 300+ lines ⭐ NEW
-│   │   │   └── filter-panel.js     # 600+ lines ⭐ NEW
-│   │   └── dashboards/             # Dashboard modules
-│   │       ├── overview.js         # 420 lines
-│   │       ├── emotion-dashboard.js # 750+ lines
-│   │       ├── negative-triggers.js # 600+ lines
-│   │       ├── heatmap-analysis.js # 550+ lines
-│   │       └── genz-insights.js    # 750+ lines
-│   ├── PHASE4_GUIDE.md             # Phase 4 documentation
-│   └── README.md
-│
-├── PROJECT_SUMMARY.md              # Complete implementation summary
-├── QUICKSTART.md                   # Quick setup guide
-└── README.md                       # This file
-```
-
-**Total**: ~10,000+ lines of code!
+---
 
 ## 🚀 Quick Start
 
-### 1. Backend Setup
+### Prerequisites
+
+- Python 3.9+
+- PostgreSQL (or SQLite for development)
+- Twitter Developer Account (for OAuth)
+
+### 1. Clone Repository
+
+```bash
+git clone https://github.com/Qusai-Mansoor/Social-Monkey.git
+cd Social-Monkey
+```
+
+### 2. Backend Setup
 
 ```bash
 cd backend
 
 # Create virtual environment
 python -m venv venv
-.\venv\Scripts\activate  # Windows
-source venv/bin/activate  # Mac/Linux
+
+# Activate virtual environment
+# Windows:
+.\venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
 
 # Install dependencies
-pip install fastapi uvicorn sqlalchemy psycopg2-binary python-jose passlib
+pip install -r requirements.txt
+```
 
-# Create .env file
-copy .env.example .env
+### 3. Environment Configuration
 
-# Start server
+Create `.env` file in `backend/` directory:
+
+```env
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/socialmonkey
+# Or for SQLite:
+# DATABASE_URL=sqlite:///./socialmonkey.db
+
+# Security
+SECRET_KEY=your-secret-key-here-min-32-chars
+ENCRYPTION_KEY=your-fernet-encryption-key-here
+
+# Twitter OAuth 2.0
+TWITTER_CLIENT_ID=your-twitter-client-id
+TWITTER_CLIENT_SECRET=your-twitter-client-secret
+TWITTER_REDIRECT_URI=http://localhost:8000/api/v1/oauth/twitter/callback
+
+# AI Model
+EMOTION_MODEL_PATH=SamLowe/roberta-base-go_emotions
+# Or use your fine-tuned BERTweet model path
+```
+
+### 4. Database Setup
+
+```bash
+# Run migrations
+alembic upgrade head
+
+# Or create tables directly
+python -c "from app.db.session import engine; from app.models.models import Base; Base.metadata.create_all(engine)"
+```
+
+### 5. Start Backend Server
+
+```bash
 python -m uvicorn main:app --reload --port 8000
 ```
 
-### 2. Access Dashboard
+Backend API: `http://localhost:8000`  
+API Docs: `http://localhost:8000/docs`
+
+### 6. Access Dashboard
+
+Open browser:
 
 ```
 http://localhost:8000/templates/dashboard.html
 ```
 
-### 3. Create Test User
+### 7. Create Test User
 
-```python
+```bash
 python
 >>> from app.db.session import SessionLocal
 >>> from app.models.models import User
@@ -205,67 +262,153 @@ python
 >>> db = SessionLocal()
 >>> user = User(
 ...     email="test@example.com",
-...     hashed_password=get_password_hash("password123"),
-...     full_name="Test User"
+...     username="testuser",
+...     hashed_password=get_password_hash("password123")
 ... )
 >>> db.add(user)
 >>> db.commit()
+>>> exit()
 ```
 
-### 4. Login
+**Login Credentials**:
 
-- **Email**: test@example.com
-- **Password**: password123
+- Email: `test@example.com`
+- Password: `password123`
 
-**See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.**
+---
 
-## 📚 Documentation
+## 📁 Project Structure
 
-- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - Complete implementation details
-- **[QUICKSTART.md](QUICKSTART.md)** - 5-minute setup guide
-- **[frontend/PHASE4_GUIDE.md](frontend/PHASE4_GUIDE.md)** - Advanced features documentation
-- **API Docs**: http://localhost:8000/docs
+```
+Social-Monkey/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/endpoints/       # API routes
+│   │   │   ├── auth.py             # Authentication
+│   │   │   ├── analytics.py        # Analytics endpoints
+│   │   │   ├── ingestion.py        # Data ingestion
+│   │   │   └── oauth.py            # OAuth flows
+│   │   ├── core/                   # Configuration & security
+│   │   │   ├── config.py
+│   │   │   └── security.py
+│   │   ├── db/                     # Database
+│   │   │   └── session.py
+│   │   ├── models/                 # SQLAlchemy models
+│   │   │   └── models.py
+│   │   ├── schemas/                # Pydantic schemas
+│   │   │   ├── user.py
+│   │   │   └── social.py
+│   │   ├── services/               # Business logic
+│   │   │   ├── emotion_engine.py   # BERTweet inference
+│   │   │   ├── slang_detector.py   # Slang detection
+│   │   │   └── twitter_service.py  # Twitter API
+│   │   └── utils/                  # Utilities
+│   │       ├── encryption.py
+│   │       └── preprocessing.py
+│   ├── tests/                      # 83 test cases
+│   │   ├── test_auth.py
+│   │   ├── test_emotion_engine.py
+│   │   ├── test_preprocessing.py
+│   │   └── test_slang_detector.py
+│   ├── main.py                     # FastAPI app
+│   ├── pyproject.toml
+│   └── pytest.ini
+│
+├── frontend/
+│   ├── templates/
+│   │   └── dashboard.html          # Main SPA
+│   ├── css/
+│   │   ├── dashboard.css           # 960+ lines
+│   │   ├── dashboard-components.css # 1100+ lines
+│   │   └── sidebar.css
+│   ├── js/
+│   │   ├── dashboard.js            # 700+ lines
+│   │   ├── sidebar.js
+│   │   ├── api.js
+│   │   ├── components/             # Reusable components
+│   │   │   ├── data-loader.js
+│   │   │   ├── chart-manager.js
+│   │   │   ├── stat-cards.js
+│   │   │   ├── filter-manager.js
+│   │   │   ├── auto-refresh.js
+│   │   │   └── filter-panel.js
+│   │   └── dashboards/
+│   │       ├── overview.js
+│   │       ├── emotion-dashboard.js
+│   │       ├── negative-triggers.js
+│   │       ├── heatmap-analysis.js
+│   │       └── genz-insights.js
+│   └── assets/
+│
+├── bertweet_goemotions_complete_analysis.md  # AI model documentation
+├── README.md                                  # This file
+└── requirements.txt
+```
 
-## 🎯 Key Features
+---
+
+## 🧪 Testing
+
+### Run Test Suite
+
+```bash
+cd backend
+pytest -v
+
+# With coverage
+pytest --cov=app --cov-report=html
+```
+
+### Test Results
+
+- **Total Tests**: 83
+- **Pass Rate**: 100%
+- **Coverage**:
+  - Authentication: 21 tests
+  - Emotion Analysis: 20 tests
+  - Text Preprocessing: 18 tests
+  - Slang Detection: 24 tests
+
+---
+
+## 🔧 API Endpoints
+
+### Authentication
+
+```bash
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+GET  /api/v1/auth/me
+```
+
+### OAuth
+
+```bash
+GET  /api/v1/oauth/twitter/url
+GET  /api/v1/oauth/twitter/callback
+```
+
+### Data Ingestion
+
+```bash
+POST /api/v1/ingest/{social_account_id}
+GET  /api/v1/ingest/status/{social_account_id}
+```
 
 ### Analytics
 
-✅ Multi-emotion sentiment analysis (5 emotions)  
-✅ Negative trigger detection with severity scoring  
-✅ Time-based posting pattern heatmaps  
-✅ Gen-Z slang usage tracking (20+ terms)  
-✅ Engagement metrics & trends  
-✅ Growth rate calculations
+```bash
+GET /api/v1/analytics/overview
+GET /api/v1/analytics/posts?days=30&platform=Twitter
+GET /api/v1/analytics/engagement-trends?days=30
+GET /api/v1/analytics/emotion-analysis?days=30
+GET /api/v1/analytics/slang-analysis?days=30
+GET /api/v1/analytics/heatmap?days=30
+```
 
-### Filtering
+**Full API Documentation**: `http://localhost:8000/docs`
 
-✅ 8 quick filter presets  
-✅ Custom date range picker  
-✅ Multi-platform selection  
-✅ Multi-emotion filtering  
-✅ Severity level filtering  
-✅ Engagement range filtering  
-✅ Sort by date/engagement/sentiment  
-✅ Filter persistence across sessions
-
-### User Experience
-
-✅ Smooth page transitions with animations  
-✅ Navigation progress bar  
-✅ Browser back/forward support  
-✅ Deep linking support  
-✅ Responsive design (mobile-friendly)  
-✅ Dark theme  
-✅ Loading states & error handling  
-✅ CSV export functionality
-
-### Real-Time
-
-✅ Auto-refresh every 5 minutes  
-✅ Manual refresh buttons  
-✅ Live countdown timers  
-✅ "Last updated" timestamps  
-✅ Smart cache clearing
+---
 
 ## 🎨 Design System
 
@@ -279,12 +422,82 @@ python
 - **Error Red**: `#EF4444`
 - **Warning Orange**: `#F59E0B`
 
-### Fonts
+### Typography
 
 - **Body**: Manrope
 - **Headings**: Poppins
 
-### Theme
+---
+
+## 📚 Documentation
+
+- **[bertweet_goemotions_complete_analysis.md](bertweet_goemotions_complete_analysis.md)** - Complete BERTweet fine-tuning analysis
+- **API Docs**: http://localhost:8000/docs (Swagger UI)
+- **Academic Documentation**: `backend/docs/` (LaTeX thesis chapters)
+
+---
+
+## 👥 Team
+
+**Final Year Project - FAST NUCES Islamabad**
+
+- **Ahmed Ali** (22i-0825) - Module 2 Lead: Deep Sentiment & Emotional Analysis, BERTweet fine-tuning
+- **Ahmad** (22i-1288) - Module 1 & 3: Data Ingestion, Slang Detection, Visualization
+- **Qusai Mansoor** (22i-0935) - Module 1 & 3: OAuth Integration, Dashboard Frontend
+
+---
+
+## 🔐 Security Features
+
+- JWT-based authentication with secure token handling
+- OAuth 2.0 PKCE flow for Twitter authorization
+- Fernet encryption for stored OAuth tokens
+- bcrypt password hashing
+- HTTPS-ready configuration
+- Rate limiting on API endpoints
+- SQL injection prevention via SQLAlchemy ORM
+
+---
+
+## 🚧 Future Enhancements
+
+- [ ] Instagram integration
+- [ ] Multi-language emotion analysis
+- [ ] Real-time WebSocket updates
+- [ ] Engagement forecasting module
+- [ ] AI-powered post optimization suggestions
+- [ ] Mobile application (React Native)
+- [ ] Transformer-based slang detection
+- [ ] Multi-modal analysis (images/videos)
+
+---
+
+## 📄 License
+
+This project is developed as a Final Year Project at FAST NUCES Islamabad.
+
+---
+
+## 🙏 Acknowledgments
+
+- **BERTweet Model**: VinAI Research (Nguyen et al., 2020)
+- **GoEmotions Dataset**: Google Research (Demszky et al., 2020)
+- **Hugging Face**: Transformers library
+- **FastAPI**: Modern Python web framework
+- **Chart.js**: Beautiful data visualizations
+
+---
+
+## 📞 Contact
+
+For questions or collaboration:
+
+- **Email**: i220825@nu.edu.pk, i221288@nu.edu.pk, i220935@nu.edu.pk
+- **GitHub**: [@Qusai-Mansoor](https://github.com/Qusai-Mansoor)
+
+---
+
+**Built with ❤️ for the Gen-Z social media era** 🚀
 
 - Dark mode throughout
 - Purple/magenta gradients
