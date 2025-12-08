@@ -18,7 +18,7 @@ from sqlalchemy import Column, String, DateTime
 from app.db.session import Base
 from app.models.models import OAuthState
 from app.analysis.emotion_engine import analyze_emotion
-from app.analysis.slang_detector import slang_detector
+from app.analysis.slang_normalizer import SlangNormalizer
 
 
 
@@ -364,7 +364,10 @@ class TwitterService:
                 # Module 2 & 3: Analyze Emotion and Slang
                 # We use the raw text for emotion analysis to capture nuance
                 emotion_result = analyze_emotion(tweet.text)
-                slang_result = slang_detector.detect(tweet.text)
+                # Use new SlangNormalizer - convert to old format for DB compatibility
+                normalizer = SlangNormalizer.get_instance()
+                detected_slang = normalizer.detect_slang(tweet.text)
+                slang_result = [{"term": s["text"], "meaning": s["normalized"]} for s in detected_slang]
 
                 # Create post
                 post = Post(
@@ -494,7 +497,10 @@ class TwitterService:
 
                     # Module 2 & 3: Analyze Emotion and Slang
                     emotion_result = analyze_emotion(reply.text)
-                    slang_result = slang_detector.detect(reply.text)
+                    # Use new SlangNormalizer - convert to old format for DB compatibility
+                    normalizer = SlangNormalizer.get_instance()
+                    detected_slang = normalizer.detect_slang(reply.text)
+                    slang_result = [{"term": s["text"], "meaning": s["normalized"]} for s in detected_slang]
 
                     # Get author username from expanded data or fallback
                     author_username = author_data.get(str(reply.author_id), f"user_{reply.author_id}")

@@ -1,6 +1,43 @@
 # 🤖 BERTweet Fine-Tuned Model Integration Guide
 
-This guide explains how to integrate your fine-tuned BERTweet model into the Social Monkey project.
+This guide explains how to integrate your fine-tuned BERTweet model (trained on Kaggle) into the Social Monkey project.
+
+---
+
+## 🚀 Quick Start (TL;DR)
+
+**If you just want to get it working fast:**
+
+1. **Download from Kaggle:**
+
+   - Go to your Kaggle notebook output → Download `bertweet_goemotions` folder (ZIP)
+
+2. **Extract to project:**
+
+   ```powershell
+   # Extract ZIP to: D:\!Fast\!Semester 7\FYP\Social-Monkey\backend\models\bertweet_goemotions\
+   ```
+
+3. **Install dependencies:**
+
+   ```powershell
+   cd "D:\!Fast\!Semester 7\FYP\Social-Monkey\backend"
+   pip install safetensors>=0.3.0
+   ```
+
+4. **Update emotion_engine.py:**
+
+   ```python
+   # Change line ~30 in backend/app/analysis/emotion_engine.py:
+   model="./models/bertweet_goemotions",  # Instead of "SamLowe/roberta-base-go_emotions"
+   ```
+
+5. **Test it:**
+   ```powershell
+   python -c "from app.analysis.emotion_engine import analyze_emotion; print(analyze_emotion('I love this!'))"
+   ```
+
+**Done!** ✅ Continue reading for detailed instructions and troubleshooting.
 
 ---
 
@@ -16,45 +53,67 @@ Currently, the project uses `SamLowe/roberta-base-go_emotions` from Hugging Face
 
 ## ✅ Option 1: Load from Local Directory (Recommended)
 
-### Step 1: Save Your Fine-Tuned Model
+### Step 1: Download Your Fine-Tuned Model from Kaggle
 
-After fine-tuning, save your model locally:
+After running your Kaggle notebook, download the **entire model folder** from Kaggle:
 
-```python
-# In your training script (e.g., Google Colab)
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+**In Kaggle:**
 
-# After training is complete
-model_path = "./bertweet_goemotions"
-model.save_pretrained(model_path)
-tokenizer.save_pretrained(model_path)
+1. After Cell 10 completes, you'll see the output: `💾 Model saved to: /kaggle/working/bertweet_goemotions`
+2. In the right sidebar, click **"Output"** tab
+3. Find the `bertweet_goemotions` folder
+4. Click the **3 dots** → **"Download"**
 
-# Download the entire folder to your local machine
-# Files should include:
-# - pytorch_model.bin (543MB)
-# - config.json
-# - tokenizer_config.json
-# - vocab.txt
-# - special_tokens_map.json
-# - etc.
+**Files you'll download (as a ZIP):**
+
+- `model.safetensors` (500+ MB) - **Main model weights**
+- `config.json` - Model configuration
+- `tokenizer_config.json` - Tokenizer settings
+- `vocab.txt` - BERTweet vocabulary
+- `special_tokens_map.json` - Special tokens
+- `training_args.bin` - Training arguments (optional)
+- `final_metrics.json` - Performance metrics
+- `per_emotion_results.csv` - Detailed emotion scores
+- `emotion_classifier.py` - Production inference class
+
+**Important:** Download the **entire folder**, not just `model.safetensors`. The model won't work without the tokenizer files.
+
+### Step 2: Extract and Place Model in Project
+
+**Extract the ZIP file** you downloaded from Kaggle, then place it in your backend:
+
+```powershell
+# Create models directory
+cd D:\!Fast\!Semester 7\FYP\Social-Monkey\backend
+mkdir models
+
+# Extract the downloaded ZIP to this location
+# Final structure should be:
 ```
-
-### Step 2: Place Model in Project
-
-Create a `models/` directory in your backend:
 
 ```
 Social-Monkey/
 ├── backend/
 │   ├── models/
 │   │   └── bertweet_goemotions/
-│   │       ├── pytorch_model.bin
-│   │       ├── config.json
-│   │       ├── tokenizer_config.json
-│   │       ├── vocab.txt
-│   │       └── ... (other files)
+│   │       ├── model.safetensors          (500+ MB) ← Main model
+│   │       ├── config.json                 (Model config)
+│   │       ├── tokenizer_config.json       (Tokenizer config)
+│   │       ├── vocab.txt                   (Vocabulary)
+│   │       ├── special_tokens_map.json     (Special tokens)
+│   │       ├── final_metrics.json          (Performance metrics)
+│   │       ├── per_emotion_results.csv     (Emotion scores)
+│   │       └── emotion_classifier.py       (Production class)
 │   ├── app/
 │   └── main.py
+```
+
+**Verify the files are in place:**
+
+```powershell
+cd backend\models\bertweet_goemotions
+dir
+# You should see model.safetensors (500+ MB) and other files
 ```
 
 ### Step 3: Update `emotion_engine.py`
@@ -79,21 +138,84 @@ EmotionEngine._classifier = pipeline(
 
 ### Step 4: Update `.gitignore`
 
-Add the models directory to `.gitignore` (model files are too large for git):
+Add the models directory to `.gitignore` (model files are too large for Git):
 
 ```gitignore
-# ML Models
+# ML Models (500+ MB files)
 backend/models/
+*.safetensors
 *.bin
 *.pt
 *.pth
+
+# Keep the directory structure but ignore model files
+!backend/models/.gitkeep
 ```
 
-### Step 5: Test the Integration
+**Create a `.gitkeep` file** to preserve the directory structure:
+
+```powershell
+cd backend\models
+echo. > .gitkeep
+```
+
+**For version control**, add a `README.md` in `backend/models/`:
+
+```markdown
+# Models Directory
+
+## BERTweet GoEmotions Model
+
+Download the fine-tuned model from:
+
+- Kaggle: [Your Kaggle Notebook Output]
+- Or Hugging Face: [Your HF Hub Link]
+
+Place the extracted `bertweet_goemotions` folder here.
+
+Required files:
+
+- model.safetensors (500+ MB)
+- config.json
+- tokenizer_config.json
+- vocab.txt
+- special_tokens_map.json
+```
+
+### Step 5: Install Required Dependencies
+
+Your BERTweet model uses `safetensors` format. Update `requirements.txt`:
+
+```powershell
+cd backend
+```
+
+Add to `requirements.txt`:
+
+```
+# ML & NLP
+transformers>=4.30.0
+torch>=2.0.0
+safetensors>=0.3.0  # Required for model.safetensors
+```
+
+Install dependencies:
+
+```powershell
+pip install -r requirements.txt
+```
+
+### Step 6: Test the Integration
 
 ```bash
 cd backend
 python -c "from app.analysis.emotion_engine import analyze_emotion; print(analyze_emotion('This is amazing! I love it!'))"
+```
+
+**If you get a `safetensors` error:**
+
+```powershell
+pip install --upgrade safetensors transformers
 ```
 
 Expected output:
@@ -122,20 +244,58 @@ Expected output:
 
 ### Step 2: Upload Your Model
 
-```python
-from huggingface_hub import HfApi
+**Option A: Upload via Python**
 
-# Login
-from huggingface_hub import login
+```python
+from huggingface_hub import HfApi, login
+
+# Login with your token
 login(token="your_hf_token_here")
 
-# Upload model
+# Upload the entire folder from Kaggle output
 api = HfApi()
 api.upload_folder(
-    folder_path="./bertweet_goemotions",
+    folder_path="./bertweet_goemotions",  # Path to extracted Kaggle output
     repo_id="your-username/bertweet-goemotions",
     repo_type="model"
 )
+
+# This will upload:
+# - model.safetensors (500+ MB)
+# - config.json
+# - tokenizer files
+# - metrics files
+```
+
+**Option B: Upload via Web Interface**
+
+1. Go to https://huggingface.co/new
+2. Create a new model repository: `your-username/bertweet-goemotions`
+3. Upload files manually:
+   - Drag and drop the `bertweet_goemotions` folder
+   - Or use git-lfs for large files
+
+**Option C: Upload via Git LFS (Recommended for large files)**
+
+```powershell
+# Install git-lfs
+git lfs install
+
+# Clone your HF repository
+git clone https://huggingface.co/your-username/bertweet-goemotions
+cd bertweet-goemotions
+
+# Copy model files
+cp -r ../bertweet_goemotions/* .
+
+# Track large files with LFS
+git lfs track "*.safetensors"
+git add .gitattributes
+git add .
+
+# Commit and push
+git commit -m "Add fine-tuned BERTweet model"
+git push
 ```
 
 ### Step 3: Update `emotion_engine.py`
@@ -366,20 +526,9 @@ curl -X POST http://localhost:8000/api/v1/ingest/1 \
 
 ### Heroku
 
-Add model files to your deployment:
+**⚠️ Warning:** The `model.safetensors` file (500+ MB) exceeds Heroku's slug size limit (500 MB). Use one of these approaches:
 
-```bash
-# Option 1: Include in git (if < 500MB)
-git lfs install
-git lfs track "backend/models/**/*.bin"
-git add .gitattributes
-git add backend/models/
-git commit -m "Add fine-tuned BERTweet model"
-
-# Option 2: Download during build
-# Add to Procfile:
-web: python download_model.py && uvicorn main:app --host 0.0.0.0 --port $PORT
-```
+**Option 1: Download model during deployment (Recommended)**
 
 Create `backend/download_model.py`:
 
@@ -387,20 +536,74 @@ Create `backend/download_model.py`:
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import os
 
-model_name = os.getenv("EMOTION_MODEL_PATH", "SamLowe/roberta-base-go_emotions")
+def download_model():
+    """Download model from Hugging Face during deployment"""
+    model_name = os.getenv("EMOTION_MODEL_PATH", "your-username/bertweet-goemotions")
 
-if not model_name.startswith("./"):
-    # Download from Hugging Face
-    print(f"Downloading model: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    if not os.path.exists("./models/bertweet_goemotions"):
+        print(f"📥 Downloading model: {model_name}")
 
-    # Save to cache
-    save_path = f"./models/{model_name.split('/')[-1]}"
-    os.makedirs(save_path, exist_ok=True)
-    tokenizer.save_pretrained(save_path)
-    model.save_pretrained(save_path)
-    print(f"Model cached to: {save_path}")
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForSequenceClassification.from_pretrained(model_name)
+
+        # Save to local cache
+        save_path = "./models/bertweet_goemotions"
+        os.makedirs(save_path, exist_ok=True)
+        tokenizer.save_pretrained(save_path)
+        model.save_pretrained(save_path)
+
+        print(f"✅ Model cached to: {save_path}")
+    else:
+        print(f"✅ Model already exists at ./models/bertweet_goemotions")
+
+if __name__ == "__main__":
+    download_model()
+```
+
+Update `Procfile`:
+
+```
+web: cd backend && python download_model.py && uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+**Option 2: Use Hugging Face Hub directly (Fastest)**
+
+Just set the environment variable on Heroku:
+
+```bash
+heroku config:set EMOTION_MODEL_PATH=your-username/bertweet-goemotions
+```
+
+The model will be downloaded from HF Hub on first request (cached afterwards).
+
+**Option 3: Use external storage**
+
+Store model on S3/Google Cloud and download during deployment:
+
+```python
+# download_model_from_s3.py
+import boto3
+import os
+
+s3 = boto3.client('s3')
+bucket = 'your-bucket'
+
+files = [
+    'model.safetensors',
+    'config.json',
+    'tokenizer_config.json',
+    'vocab.txt',
+    'special_tokens_map.json'
+]
+
+os.makedirs('./models/bertweet_goemotions', exist_ok=True)
+
+for file in files:
+    s3.download_file(
+        bucket,
+        f'models/bertweet/{file}',
+        f'./models/bertweet_goemotions/{file}'
+    )
 ```
 
 ### AWS/Azure
@@ -428,30 +631,199 @@ def download_model_from_s3():
 
 ---
 
+## 🔧 Troubleshooting
+
+### Issue 1: `safetensors` not found
+
+**Error:**
+
+```
+ImportError: cannot import name 'safe_open' from 'safetensors'
+```
+
+**Solution:**
+
+```powershell
+pip install --upgrade safetensors>=0.3.0
+```
+
+### Issue 2: Model file not found
+
+**Error:**
+
+```
+OSError: ./models/bertweet_goemotions does not appear to have a file named config.json
+```
+
+**Solution:**
+Make sure you downloaded the **entire folder** from Kaggle, not just `model.safetensors`. Required files:
+
+- ✅ `model.safetensors`
+- ✅ `config.json`
+- ✅ `tokenizer_config.json`
+- ✅ `vocab.txt`
+- ✅ `special_tokens_map.json`
+
+### Issue 3: Out of memory during model loading
+
+**Error:**
+
+```
+RuntimeError: CUDA out of memory
+```
+
+**Solutions:**
+
+```python
+# Option 1: Force CPU
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+# Option 2: Use 8-bit quantization (reduces memory by ~4x)
+from transformers import BitsAndBytesConfig
+
+quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+model = AutoModelForSequenceClassification.from_pretrained(
+    "./models/bertweet_goemotions",
+    quantization_config=quantization_config
+)
+
+# Option 3: Offload to CPU
+model = AutoModelForSequenceClassification.from_pretrained(
+    "./models/bertweet_goemotions",
+    device_map="auto",  # Automatically manage device placement
+    low_cpu_mem_usage=True
+)
+```
+
+### Issue 4: Slow first prediction
+
+**Explanation:** Model is loaded into memory on first use (can take 5-10 seconds).
+
+**Solution:** Pre-warm the model on startup:
+
+```python
+# In main.py
+from app.analysis.emotion_engine import EmotionEngine
+
+@app.on_event("startup")
+async def startup_event():
+    # Pre-load model
+    engine = EmotionEngine.get_instance()
+    # Warm up with dummy prediction
+    engine.analyze("Hello world")
+    print("✅ Emotion model pre-loaded")
+```
+
+### Issue 5: Different results from Kaggle notebook
+
+**Cause:** Threshold differences (Kaggle uses 0.3, default pipeline uses 0.5)
+
+**Solution:** Ensure threshold is set correctly in `emotion_engine.py`:
+
+```python
+threshold = 0.3  # Match Kaggle notebook
+scores = {
+    item['label']: float(item['score'])
+    for item in results[0]
+    if item['score'] >= threshold
+}
+```
+
+---
+
 ## 📝 Summary & Recommendations
 
 ### ✅ Recommended Approach for Your Project
 
-1. **Development**: Use Option 1 (Local Directory)
+1. **Development (Local Machine)**: Use Option 1 (Local Directory)
 
-   - Fast loading
-   - No internet dependency
-   - Easy to test
+   - ✅ Fast loading (no download time)
+   - ✅ No internet dependency
+   - ✅ Easy to test and debug
+   - ✅ Works offline
+   - ⚠️ Requires 500+ MB disk space
 
-2. **Production**: Use Option 2 or 3 (Hugging Face Hub + Env Vars)
-   - Smaller deployment size
-   - Easy team collaboration
-   - Version control
+2. **Production/Deployment**: Use Option 2 (Hugging Face Hub + Env Vars)
 
-### 🎯 Next Steps
+   - ✅ No need to store 500+ MB in Git
+   - ✅ Easy team collaboration
+   - ✅ Automatic version control
+   - ✅ Works on Heroku/AWS/Azure
+   - ⚠️ Requires internet on first load
 
-1. ✅ Save your fine-tuned model from Colab
-2. ✅ Place in `backend/models/bertweet_goemotions/`
-3. ✅ Update `emotion_engine.py` with new model path
-4. ✅ Add threshold configuration (0.3)
-5. ✅ Test with unit tests
-6. ✅ Test via dashboard
-7. ✅ Update documentation
+3. **Best Practice**: Support both options via environment variable
+
+   ```env
+   # .env (local development)
+   EMOTION_MODEL_PATH=./models/bertweet_goemotions
+
+   # .env (production)
+   EMOTION_MODEL_PATH=your-username/bertweet-goemotions
+   ```
+
+### 🎯 Integration Checklist
+
+Follow these steps in order:
+
+#### Phase 1: Download from Kaggle
+
+- [ ] Run all cells in Kaggle notebook (Cell 1-15)
+- [ ] Wait for Cell 10 to complete training
+- [ ] Download `bertweet_goemotions` folder from Kaggle Output
+- [ ] Verify you have `model.safetensors` (500+ MB) in the ZIP
+
+#### Phase 2: Local Setup
+
+- [ ] Extract ZIP to `backend/models/bertweet_goemotions/`
+- [ ] Verify all files exist (model.safetensors, config.json, vocab.txt, etc.)
+- [ ] Update `.gitignore` to exclude `*.safetensors`
+- [ ] Add `safetensors>=0.3.0` to `requirements.txt`
+- [ ] Run `pip install -r requirements.txt`
+
+#### Phase 3: Code Integration
+
+- [ ] Update `emotion_engine.py` model path to `./models/bertweet_goemotions`
+- [ ] Set threshold to `0.3` (not 0.5)
+- [ ] Add model pre-loading on startup (optional but recommended)
+- [ ] Update `config.py` with `EMOTION_MODEL_PATH` setting
+
+#### Phase 4: Testing
+
+- [ ] Test model loads: `python -c "from transformers import pipeline; p = pipeline('text-classification', model='./models/bertweet_goemotions')"`
+- [ ] Test emotion engine: `python -c "from app.analysis.emotion_engine import analyze_emotion; print(analyze_emotion('I love this!'))"`
+- [ ] Run unit tests: `pytest tests/test_bertweet_integration.py`
+- [ ] Test via API endpoint
+- [ ] Test via dashboard
+
+#### Phase 5: Production (Optional)
+
+- [ ] Create Hugging Face account
+- [ ] Upload model to HF Hub
+- [ ] Update production `.env` with HF Hub path
+- [ ] Test deployment on staging environment
+- [ ] Deploy to production
+
+### 📊 Quick Verification Commands
+
+After integration, run these to verify everything works:
+
+```powershell
+# 1. Check files exist
+cd backend\models\bertweet_goemotions
+dir
+# Should show model.safetensors (500+ MB)
+
+# 2. Test model loading
+cd ..\..
+python -c "from transformers import AutoTokenizer; t = AutoTokenizer.from_pretrained('./models/bertweet_goemotions'); print('✅ Tokenizer loaded')"
+
+# 3. Test emotion analysis
+python -c "from app.analysis.emotion_engine import analyze_emotion; result = analyze_emotion('I am so excited about this project!'); print(result)"
+
+# Expected output:
+# {'scores': {'joy': 0.92, 'excitement': 0.87, ...}, 'dominant': 'joy', 'sentiment_score': 0.85}
+```
 
 ### 📚 Additional Resources
 

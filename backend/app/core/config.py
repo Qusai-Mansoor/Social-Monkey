@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
     
+    # Emotion Analysis Model Configuration
+    EMOTION_MODEL_PATH: str = "./models/bertweet_goemotions"
+    EMOTION_MODEL_THRESHOLD: float = 0.3
+    EMOTION_MODEL_MAX_LENGTH: int = 128
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

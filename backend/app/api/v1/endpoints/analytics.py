@@ -24,7 +24,7 @@ def analyze_existing_posts(
     Trigger analysis for existing posts that haven't been analyzed yet.
     """
     from app.analysis.emotion_engine import analyze_emotion
-    from app.analysis.slang_detector import slang_detector
+    from app.analysis.slang_normalizer import SlangNormalizer
 
     # Get user's social accounts
     account_ids = db.query(SocialAccount.id).filter(SocialAccount.user_id == current_user.id).all()
@@ -48,7 +48,9 @@ def analyze_existing_posts(
         post.sentiment_score = emotion_result["sentiment_score"]
         
         # Analyze Slang
-        slang_result = slang_detector.detect(post.content)
+        normalizer = SlangNormalizer.get_instance()
+        detected_slang = normalizer.detect_slang(post.content)
+        slang_result = [{"term": s["text"], "meaning": s["normalized"]} for s in detected_slang]
         post.detected_slang = slang_result
         
         updated_count += 1
