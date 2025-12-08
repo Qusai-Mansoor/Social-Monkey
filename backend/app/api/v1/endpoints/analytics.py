@@ -910,7 +910,7 @@ def get_post_comments(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get all comments for a specific post with emotion analysis
+    Get all comments for a specific post with emotion analysis and comprehensive stats
     """
     try:
         # Get user's social accounts
@@ -924,6 +924,7 @@ def get_post_comments(
                 "post": None,
                 "comments": [],
                 "total_comments": 0,
+                "stats": {},
                 "error": "No social accounts found"
             }
 
@@ -955,9 +956,20 @@ def get_post_comments(
             "sentiment_score": post.sentiment_score
         }
 
-        # Format comments data
+        # Format comments data and calculate stats
         comments_data = []
+        total_likes = 0
+        sentiment_scores = []
+        emotion_counts = {}
+        
         for comment in comments:
+            # Add to stats calculations
+            total_likes += comment.likes_count or 0
+            if comment.sentiment_score is not None:
+                sentiment_scores.append(comment.sentiment_score)
+            if comment.dominant_emotion:
+                emotion_counts[comment.dominant_emotion] = emotion_counts.get(comment.dominant_emotion, 0) + 1
+            
             comments_data.append({
                 "id": comment.id,
                 "author_username": comment.author_username,
@@ -970,10 +982,19 @@ def get_post_comments(
                 "detected_slang": comment.detected_slang
             })
 
+        # Calculate aggregate stats
+        stats = {
+            "total_comments": len(comments_data),
+            "total_likes": total_likes,
+            "avg_sentiment": sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0,
+            "dominant_emotion": max(emotion_counts.items(), key=lambda x: x[1])[0] if emotion_counts else "neutral",
+            "emotion_breakdown": emotion_counts
+        }
+
         return {
             "post": post_data,
             "comments": comments_data,
-            "total_comments": len(comments_data)
+            "stats": stats
         }
 
     except HTTPException:
