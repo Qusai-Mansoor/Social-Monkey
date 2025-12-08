@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Monkey - Test & Coverage Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 50px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .header p {
+            font-size: 1.3em;
+            opacity: 0.95;
+        }
+        
+        .timestamp {
+            font-size: 1em !important;
+            opacity: 0.8;
+            margin-top: 10px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            padding: 50px;
+            background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 35px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+            border-color: #667eea;
+        }
+        
+        .stat-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+        
+        .stat-value {
+            font-size: 3.5em;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 1.2em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 600;
+        }
+        
+        .success { color: #10b981; }
+        .warning { color: #f59e0b; }
+        .info { color: #3b82f6; }
+        .primary { color: #667eea; }
+        .danger { color: #ef4444; }
+        
+        .content {
+            padding: 50px;
+        }
+        
+        .section {
+            margin-bottom: 60px;
+        }
+        
+        .section-title {
+            font-size: 2.2em;
+            color: #333;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 4px solid #667eea;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .chart-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        th, td {
+            padding: 18px;
+            text-align: left;
+        }
+        
+        th {
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.95em;
+            letter-spacing: 1.5px;
+        }
+        
+        tbody tr {
+            border-bottom: 1px solid #e5e7eb;
+            transition: all 0.2s ease;
+        }
+        
+        tbody tr:hover {
+            background: #f9fafb;
+            transform: scale(1.01);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 6px 15px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            font-weight: 700;
+        }
+        
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .progress-bar {
+            background: #e5e7eb;
+            height: 35px;
+            border-radius: 20px;
+            overflow: hidden;
+            margin: 15px 0;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            transition: width 1.5s ease;
+            font-size: 0.95em;
+        }
+        
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+            padding: 25px;
+            border-radius: 15px;
+            border-left: 5px solid #667eea;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        
+        .metric-label {
+            font-size: 0.95em;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .metric-value {
+            font-size: 2.2em;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        
+        .footer {
+            background: #1f2937;
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .footer p {
+            margin: 10px 0;
+            font-size: 1.1em;
+        }
+        
+        code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Test & Coverage Report</h1>
+            <p><strong>Social Monkey</strong> - Emotion-aware Social Media Helper</p>
+            <p class="timestamp">Generated on December 08, 2025 at 06:24 PM</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">🧪</div>
+                <div class="stat-value primary">83</div>
+                <div class="stat-label">Total Tests</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">✅</div>
+                <div class="stat-value success">83</div>
+                <div class="stat-label">Tests Passed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📊</div>
+                <div class="stat-value info">46%</div>
+                <div class="stat-label">Code Coverage</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">⚡</div>
+                <div class="stat-value warning">28.26s</div>
+                <div class="stat-label">Execution Time</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📝</div>
+                <div class="stat-value primary">1374</div>
+                <div class="stat-label">Total Statements</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">✓</div>
+                <div class="stat-value success">640</div>
+                <div class="stat-label">Covered Lines</div>
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- Success Rate -->
+            <div class="section">
+                <h2 class="section-title"><span>📈</span> Test Success Rate</h2>
+                <div class="progress-bar" style="height: 50px;">
+                    <div class="progress-fill" style="width: 100.0%; font-size: 1.2em;">
+                        83/83 Tests Passed (100.0%)
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Charts -->
+            <div class="section">
+                <h2 class="section-title"><span>📊</span> Visual Analytics</h2>
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h3 class="chart-title">Coverage by Module</h3>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3 class="chart-title">Coverage Distribution</h3>
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                </div>
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h3 class="chart-title">Top 10 Best Coverage</h3>
+                        <canvas id="topCoverageChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3 class="chart-title">Module Coverage Breakdown</h3>
+                        <canvas id="moduleChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Category Breakdown -->
+            <div class="section">
+                <h2 class="section-title"><span>🔍</span> Coverage by Category</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Files</th>
+                                <th>Statements</th>
+                                <th>Missing</th>
+                                <th>Coverage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+
+                            <tr>
+                                <td><strong>API Core</strong></td>
+                                <td>3</td>
+                                <td>10</td>
+                                <td>0</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 100%;">
+                                            100%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Models</strong></td>
+                                <td>2</td>
+                                <td>78</td>
+                                <td>0</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 100%;">
+                                            100%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Schemas</strong></td>
+                                <td>3</td>
+                                <td>75</td>
+                                <td>0</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 100%;">
+                                            100%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Analysis</strong></td>
+                                <td>3</td>
+                                <td>65</td>
+                                <td>6</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 90%;">
+                                            90%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Core</strong></td>
+                                <td>4</td>
+                                <td>186</td>
+                                <td>56</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 69%;">
+                                            69%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Database</strong></td>
+                                <td>2</td>
+                                <td>12</td>
+                                <td>4</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 66%;">
+                                            66%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Utils</strong></td>
+                                <td>4</td>
+                                <td>125</td>
+                                <td>51</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 59%;">
+                                            59%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>API Endpoints</strong></td>
+                                <td>7</td>
+                                <td>567</td>
+                                <td>414</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 26%;">
+                                            26%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Services</strong></td>
+                                <td>2</td>
+                                <td>256</td>
+                                <td>203</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 20%;">
+                                            20%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>Other</strong></td>
+                                <td>1</td>
+                                <td>0</td>
+                                <td>0</td>
+                                <td>
+                                    <div class="progress-bar" style="height: 30px;">
+                                        <div class="progress-fill" style="width: 0%;">
+                                            0%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Key Metrics -->
+            <div class="section">
+                <h2 class="section-title"><span>🎯</span> Key Performance Metrics</h2>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Test Throughput</div>
+                        <div class="metric-value success">2.94 tests/sec</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Avg Test Duration</div>
+                        <div class="metric-value info">340ms per test</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Untested Lines</div>
+                        <div class="metric-value danger">734</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Test Categories</div>
+                        <div class="metric-value primary">4 Categories</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Top Performers -->
+            <div class="section">
+                <h2 class="section-title"><span>🏆</span> Top 10 Coverage Leaders</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Module</th>
+                                <th>Statements</th>
+                                <th>Coverage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+
+                            <tr>
+                                <td><strong>#1</strong></td>
+                                <td><code>app\analysis\__init__.py</code></td>
+                                <td>3</td>
+                                <td><span class="badge badge-success">100%</span></td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>#2</strong></td>
+                                <td><code>app\analysis\slang_detector.py</code></td>
+                                <td>18</td>
+                                <td><span class="badge badge-success">100%</span></td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>#3</strong></td>
+                                <td><code>app\api\v1\api.py</code></td>
+                                <td>10</td>
+                                <td><span class="badge badge-success">100%</span></td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>#4</strong></td>
+                                <td><code>app\models\models.py</code></td>
+                                <td>78</td>
+                                <td><span class="badge badge-success">100%</span></td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>#5</strong></td>
+                                <td><code>app\schemas\social.py</code></td>
+                                <td>53</td>
+                                <td><span class="badge badge-success">100%</span></td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>#6</strong></td>
+                                <td><code>app\schemas\user.py</code></td>
+                                <td>22</td>
+                                <td><span class="badge badge-success">100%</span></td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>#7</strong></td>
+                                <td><code>app\utils\preprocessing.py</code></td>
+                                <td>32</td>
+                                <td><span class="badge badge-success">100%</span></td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>#8</strong></td>
+                                <td><code>app\core\config.py</code></td>
+                                <td>33</td>
+                                <td><span class="badge badge-success">88%</span></td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>#9</strong></td>
+                                <td><code>app\analysis\emotion_engine.py</code></td>
+                                <td>44</td>
+                                <td><span class="badge badge-success">86%</span></td>
+                            </tr>
+
+                            <tr>
+                                <td><strong>#10</strong></td>
+                                <td><code>app\api\v1\endpoints\auth.py</code></td>
+                                <td>59</td>
+                                <td><span class="badge badge-success">85%</span></td>
+                            </tr>
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>Social Monkey</strong> - Final Year Project 2025</p>
+            <p>Test Framework: pytest | Coverage Tool: pytest-cov | Total Files: 31</p>
+            <p style="opacity: 0.7; margin-top: 10px;">Comprehensive Testing & Quality Assurance Report</p>
+        </div>
+    </div>
+    
+    <script>
+        // Chart.js configuration
+        Chart.defaults.font.family = 'Segoe UI';
+        Chart.defaults.font.size = 13;
+        Chart.defaults.color = '#374151';
+        
+        // Category Coverage Chart
+        const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+        new Chart(categoryCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Other', 'Analysis', 'API Core', 'API Endpoints', 'Core', 'Database', 'Models', 'Schemas', 'Services', 'Utils'],
+                datasets: [{
+                    label: 'Coverage %',
+                    data: [0, 90, 100, 26, 69, 66, 100, 100, 20, 59],
+                    backgroundColor: [
+                        '#667eea', '#764ba2', '#f093fb', '#4facfe', 
+                        '#43e97b', '#fa709a', '#fee140', '#30cfd0', '#a8edea'
+                    ],
+                    borderWidth: 0,
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+        
+        // Distribution Chart
+        const distributionCtx = document.getElementById('distributionChart').getContext('2d');
+        new Chart(distributionCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['0-25%', '26-50%', '51-75%', '76-100%'],
+                datasets: [{
+                    data: [2, 2, 3, 24],
+                    backgroundColor: ['#ef4444', '#f59e0b', '#eab308', '#10b981'],
+                    borderWidth: 3,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            font: {
+                                size: 13
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Top Coverage Chart
+        const topCoverageCtx = document.getElementById('topCoverageChart').getContext('2d');
+        new Chart(topCoverageCtx, {
+            type: 'bar',
+            data: {
+                labels: ['__init__.py', 'slang_detector.py', 'api.py', 'models.py', 'social.py', 'user.py', 'preprocessing.py', 'config.py', 'emotion_engine.py', 'auth.py'],
+                datasets: [{
+                    label: 'Coverage %',
+                    data: [100, 100, 100, 100, 100, 100, 100, 88, 86, 85],
+                    backgroundColor: '#10b981',
+                    borderWidth: 0,
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+        
+        // Module Coverage Chart
+        const moduleCtx = document.getElementById('moduleChart').getContext('2d');
+        new Chart(moduleCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Other', 'Analysis', 'API Core', 'API Endpoints', 'Core', 'Database', 'Models', 'Schemas', 'Services', 'Utils'],
+                datasets: [{
+                    data: [0, 65, 10, 567, 186, 12, 78, 75, 256, 125],
+                    backgroundColor: [
+                        '#667eea', '#764ba2', '#f093fb', '#4facfe', 
+                        '#43e97b', '#fa709a', '#fee140', '#30cfd0', '#a8edea'
+                    ],
+                    borderWidth: 3,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 15,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
