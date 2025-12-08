@@ -14,6 +14,9 @@ from typing import Generator, Dict
 import os
 from datetime import datetime, timedelta
 
+# Set testing environment variable to disable rate limiting
+os.environ["TESTING"] = "true"
+
 from main import app
 from app.db.session import get_db, Base
 from app.core.security import create_access_token, get_password_hash

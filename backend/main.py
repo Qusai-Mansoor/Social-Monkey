@@ -6,6 +6,13 @@ from app.core.config import settings
 from app.api.v1.api import api_router
 from app.db.session import engine, Base
 from starlette.middleware.sessions import SessionMiddleware
+from app.core.middleware import (
+    SecurityHeadersMiddleware,
+    RateLimitMiddleware,
+    AuthRateLimitMiddleware,
+    RequestSizeLimitMiddleware,
+    SecureSessionMiddleware
+)
 from pathlib import Path
 import os
 
@@ -27,16 +34,35 @@ app = FastAPI(
 # Mount static files from frontend directory
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
-# Configure CORS - Updated to include file:// protocol for local development
+# Configure CORS - Restricted for production security
+# In production, replace ["*"] with specific allowed origins
+cors_origins = settings.cors_origins if settings.ENVIRONMENT == "production" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
-# Add session middleware for OAuth state management
+# Add security middleware (order matters!)
+# 1. Request size limit (prevent large payloads)
+app.add_middleware(RequestSizeLimitMiddleware, max_size=10 * 1024 * 1024)  # 10MB
+
+# 2. Rate limiting for all endpoints
+app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
+
+# 3. Stricter rate limiting for auth endpoints
+app.add_middleware(AuthRateLimitMiddleware, auth_attempts_per_minute=5)
+
+# 4. Security headers (XSS, clickjacking protection, etc.)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 5. Secure session cookies
+app.add_middleware(SecureSessionMiddleware)
+
+# 6. Session middleware for OAuth state management
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 # Include API router
