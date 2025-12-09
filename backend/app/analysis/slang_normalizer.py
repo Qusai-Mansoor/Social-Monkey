@@ -64,7 +64,7 @@ class SlangNormalizer:
     
     def _is_valid_slang(self, text: str) -> bool:
         """
-        Check if detected entity is actually valid slang (not @mention, #hashtag, URL, etc.)
+        Check if detected entity is actually valid slang (not @mention, #hashtag, URL, proper noun, etc.)
         
         Args:
             text: The detected entity text
@@ -107,6 +107,18 @@ class SlangNormalizer:
         if len(text) > 50:
             return False
         
+        # Filter out proper nouns (words starting with capital letter)
+        # Slang is typically all lowercase or all caps, not mixed case
+        if text[0].isupper() and len(text) > 1 and not text.isupper():
+            # CamelCase or Title Case - likely proper noun
+            return False
+        
+        # Filter out compound words with multiple capitals (e.g., TLPDharna, MyName)
+        capital_count = sum(1 for c in text if c.isupper())
+        if capital_count > 1 and not text.isupper():
+            # Multiple capitals but not all caps - likely acronym/proper noun
+            return False
+        
         return True
     
     def detect_slang(self, text: str) -> List[Dict]:
@@ -142,6 +154,12 @@ class SlangNormalizer:
                     
                     slang_term = ent.text.lower()
                     
+                    # IMPORTANT: Only accept if term exists in dictionary
+                    # This prevents false positives from NER model
+                    if not self._exists_in_dictionary(slang_term):
+                        logger.debug(f"Skipping '{slang_term}' - not in slang dictionary")
+                        continue
+                    
                     # Look up in dictionary
                     normalized = self._lookup_slang(slang_term)
                     
@@ -158,6 +176,30 @@ class SlangNormalizer:
         except Exception as e:
             logger.error(f"Error detecting slang: {e}")
             return []
+    
+    def _exists_in_dictionary(self, slang: str) -> bool:
+        """
+        Check if slang term exists in dictionary (including variations)
+        
+        Args:
+            slang: Slang term (should already be lowercased)
+            
+        Returns:
+            True if found in dictionary, False otherwise
+        """
+        slang_lower = slang.lower()
+        
+        # Direct lookup
+        if slang_lower in SlangNormalizer._slang_dict:
+            return True
+        
+        # Check variations
+        for entry in SlangNormalizer._slang_dict.values():
+            variations = entry.get('variations', [])
+            if slang_lower in [v.lower() for v in variations]:
+                return True
+        
+        return False
     
     def _lookup_slang(self, slang: str) -> str:
         """

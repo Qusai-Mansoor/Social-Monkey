@@ -1,4 +1,23 @@
 {
+  "no cap": {
+    "canonical_form": "no cap",
+    "variations": ["no cap", "No Cap", "NO CAP", "nocap", "noCap", "NoCap", "NOCAP"],
+    "full_form": "no lie",
+    "description": "no lie, for real, seriously",
+    "normalized_text": "no lie, for real, seriously",
+    "category": "affirmation",
+    "sentiment": "neutral",
+    "intensity": "medium",
+    "context": "Used to emphasize that something is true or serious, no exaggeration",
+    "multi_word": true,
+    "expansion_priority": "high",
+    "part_of_speech": "phrase",
+    "emoji_equivalents": ["💯", "🚫🧢"],
+    "example": "That movie was amazing no cap",
+    "usage_type": "emphasis",
+    "formality": "informal",
+    "platform_origin": "twitter"
+  },
   "w": {
     "canonical_form": "w",
     "variations": ["W", "w"],
