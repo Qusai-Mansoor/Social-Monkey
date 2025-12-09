@@ -21,7 +21,7 @@ def analyze_existing_posts(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Trigger analysis for existing posts that haven't been analyzed yet.
+    Trigger analysis for existing posts AND comments that haven't been analyzed yet.
     """
     from app.analysis.emotion_engine import analyze_emotion
     from app.analysis.slang_normalizer import SlangNormalizer
@@ -31,33 +31,77 @@ def analyze_existing_posts(
     account_ids = [id[0] for id in account_ids]
     
     if not account_ids:
-        return {"message": "No social accounts found", "updated_count": 0}
+        return {"message": "No social accounts found", "updated_count": 0, "comments_updated": 0}
 
-    # Fetch posts that need analysis (where emotion_scores is null)
+    # Fetch posts that need analysis (where emotion_scores OR dominant_emotion is null)
     posts = db.query(Post).filter(
-        Post.social_account_id.in_(account_ids),
-        Post.emotion_scores == None
+        Post.social_account_id.in_(account_ids)
+    ).filter(
+        (Post.emotion_scores == None) | (Post.dominant_emotion == None)
     ).all()
     
+    print(f"DEBUG: Found {len(posts)} posts needing analysis")
+    for p in posts:
+        print(f"  Post ID {p.id}: emotion_scores={p.emotion_scores}, dominant_emotion={p.dominant_emotion}")
+    
     updated_count = 0
+    normalizer = SlangNormalizer.get_instance()
+    
     for post in posts:
+        print(f"DEBUG: Analyzing post {post.id}: {post.content[:50]}...")
         # Analyze Emotion
         emotion_result = analyze_emotion(post.content)
         post.emotion_scores = emotion_result["scores"]
         post.dominant_emotion = emotion_result["dominant"]
         post.sentiment_score = emotion_result["sentiment_score"]
         
+        print(f"  Result: dominant={emotion_result['dominant']}, sentiment={emotion_result['sentiment_score']}")
+        
         # Analyze Slang
-        normalizer = SlangNormalizer.get_instance()
         detected_slang = normalizer.detect_slang(post.content)
         slang_result = [{"term": s["text"], "meaning": s["normalized"]} for s in detected_slang]
         post.detected_slang = slang_result
         
+        print(f"  Slang: {len(slang_result)} terms detected")
+        
         updated_count += 1
+    
+    # Also analyze comments
+    post_ids = db.query(Post.id).filter(Post.social_account_id.in_(account_ids)).all()
+    post_ids = [id[0] for id in post_ids]
+    
+    comments_updated = 0
+    if post_ids:
+        comments = db.query(Comment).filter(
+            Comment.post_id.in_(post_ids)
+        ).filter(
+            (Comment.emotion_scores == None) | (Comment.dominant_emotion == None)
+        ).all()
+        
+        for comment in comments:
+            # Analyze Emotion
+            emotion_result = analyze_emotion(comment.content)
+            comment.emotion_scores = emotion_result["scores"]
+            comment.dominant_emotion = emotion_result["dominant"]
+            comment.sentiment_score = emotion_result["sentiment_score"]
+            
+            # Analyze Slang
+            detected_slang = normalizer.detect_slang(comment.content)
+            slang_result = [{"term": s["text"], "meaning": s["normalized"]} for s in detected_slang]
+            comment.detected_slang = slang_result
+            
+            comments_updated += 1
         
     db.commit()
     
-    return {"message": "Analysis complete", "updated_count": updated_count}
+    print(f"DEBUG: Committing changes. Posts: {updated_count}, Comments: {comments_updated}")
+    
+    return {
+        "message": "Analysis complete", 
+        "updated_count": updated_count,
+        "comments_updated": comments_updated,
+        "total_updated": updated_count + comments_updated
+    }
 
 @router.get("/overview")
 def get_overview_data(
@@ -99,7 +143,7 @@ def get_overview_data(
         posts_with_slang = 0
         for post in posts:
             slang_data = post.detected_slang
-            if slang_data and isinstance(slang_data, dict) and slang_data.get("found_slang"):
+            if slang_data and isinstance(slang_data, list) and len(slang_data) > 0:
                 posts_with_slang += 1
                 
         slang_usage_percent = (posts_with_slang / total_posts * 100) if total_posts > 0 else 0
@@ -271,11 +315,10 @@ def get_user_stats(
         total_engagement = 0
         
         for post in posts:
-            # Use stored slang data
+            # Use stored slang data - it's a list of {"term": ..., "meaning": ...} objects
             slang_data = post.detected_slang
-            if slang_data and isinstance(slang_data, dict):
-                # Assuming structure from slang_detector
-                total_slang_terms += slang_data.get('total_count', 0)
+            if slang_data and isinstance(slang_data, list):
+                total_slang_terms += len(slang_data)
             
             total_engagement += calculate_engagement(post)
         
@@ -448,7 +491,7 @@ def get_slang_analysis(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get Gen-Z slang analysis of user's posts (Real Data)"""
+    """Get Gen-Z slang analysis of user's posts AND comments (Real Data)"""
     try:
         # Get user's social accounts
         accounts = db.query(SocialAccount).filter(
@@ -473,16 +516,37 @@ def get_slang_analysis(
         slang_frequency = {}
         total_slang_terms = 0
         
+        # Process posts
         for post in posts:
-            # Use stored slang data
+            # Use stored slang data - it's a list of {"term": ..., "meaning": ...} objects
             slang_data = post.detected_slang
-            if slang_data and isinstance(slang_data, dict):
-                # Assuming structure: {"found_slang": ["term1", "term2"], "total_count": 2}
-                found_slang = slang_data.get("found_slang", [])
-                total_slang_terms += len(found_slang)
+            if slang_data and isinstance(slang_data, list):
+                total_slang_terms += len(slang_data)
                 
-                for term in found_slang:
-                    slang_frequency[term] = slang_frequency.get(term, 0) + 1
+                for item in slang_data:
+                    if isinstance(item, dict):
+                        term = item.get("term")
+                        if term:
+                            slang_frequency[term] = slang_frequency.get(term, 0) + 1
+        
+        # Get all comments from these posts
+        post_ids = [post.id for post in posts]
+        if post_ids:
+            comments = db.query(Comment).filter(
+                Comment.post_id.in_(post_ids)
+            ).all()
+            
+            # Process comments
+            for comment in comments:
+                slang_data = comment.detected_slang
+                if slang_data and isinstance(slang_data, list):
+                    total_slang_terms += len(slang_data)
+                    
+                    for item in slang_data:
+                        if isinstance(item, dict):
+                            term = item.get("term")
+                            if term:
+                                slang_frequency[term] = slang_frequency.get(term, 0) + 1
         
         # Format for frontend
         sorted_terms = sorted(slang_frequency.items(), key=lambda x: x[1], reverse=True)
@@ -531,8 +595,9 @@ def get_top_posts(
             
             # Use stored analysis
             emotion = post.dominant_emotion or "neutral"
-            slang_data = post.detected_slang or {}
-            slang_terms = slang_data.get("found_slang", []) if isinstance(slang_data, dict) else []
+            slang_data = post.detected_slang or []
+            # detected_slang is a list of {"term": ..., "meaning": ...} objects
+            slang_terms = [item.get("term") for item in slang_data if isinstance(item, dict)] if isinstance(slang_data, list) else []
             
             posts_with_engagement.append({
                 "id": post.id,

@@ -60,7 +60,17 @@ class OverviewDashboard {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
         try {
           const result = await window.api.triggerAnalysis();
-          alert(`Analysis Complete! Updated ${result.updated_count} posts.`);
+          const totalUpdated =
+            result.total_updated || result.updated_count || 0;
+          const postsUpdated = result.updated_count || 0;
+          const commentsUpdated = result.comments_updated || 0;
+
+          let message = `Analysis Complete!\n\n`;
+          message += `✓ ${postsUpdated} posts analyzed\n`;
+          message += `✓ ${commentsUpdated} comments analyzed\n`;
+          message += `✓ Total: ${totalUpdated} items updated`;
+
+          alert(message);
           // Reload page to show new data
           window.location.reload();
         } catch (e) {
@@ -187,10 +197,11 @@ class OverviewDashboard {
     }
 
     // Initialize emotion chart
-    if (this.data && this.data.emotionData) {
+    // Always call createEmotionChart - it will handle empty data internally
+    if (this.data) {
       this.chartManager.createEmotionChart(
         "emotionChart",
-        this.data.emotionData
+        this.data.emotionData || {}
       );
     }
 
