@@ -112,6 +112,12 @@ class SlangNormalizer:
         try:
             # Run RoBERTa model inference
             results = SlangNormalizer._slang_detector(text)
+            
+            # Log all model outputs for debugging
+            logger.info(f"🔍 RoBERTa model detected {len(results)} potential slang term(s) in: '{text}'")
+            for i, result in enumerate(results):
+                logger.info(f"   [{i+1}] word='{result['word']}', score={result['score']:.3f}, start={result['start']}, end={result['end']}")
+            
             detected = []
             
             for result in results:
@@ -123,24 +129,84 @@ class SlangNormalizer:
                 # Normalize to lowercase for dictionary lookup
                 slang_lower = slang_term.lower()
                 
-                # CRITICAL: Only accept if term exists in dictionary
-                # This is the final validation to prevent false positives
-                if not self._exists_in_dictionary(slang_lower):
-                    logger.debug(f"Skipping '{slang_term}' - not in slang dictionary (confidence: {result['score']:.2f})")
-                    continue
-                
-                # Look up in dictionary
-                normalized = self._lookup_slang(slang_lower)
-                
-                detected.append({
-                    "text": slang_term,
-                    "start": result["start"],
-                    "end": result["end"],
-                    "normalized": normalized,
-                    "original": slang_lower,
-                    "confidence": float(result["score"])
-                })
+                # Try to validate the full detected term first
+                if self._exists_in_dictionary(slang_lower):
+                    # Direct match found
+                    normalized = self._lookup_slang(slang_lower)
+                    logger.info(f"✅ Validated slang: '{slang_term}' → '{normalized}' (confidence: {result['score']:.3f})")
+                    
+                    detected.append({
+                        "text": slang_term,
+                        "start": result["start"],
+                        "end": result["end"],
+                        "normalized": normalized,
+                        "original": slang_lower,
+                        "confidence": float(result["score"])
+                    })
+                else:
+                    # Not in dictionary - try fallback strategies
+                    found_match = False
+                    
+                    # Strategy 1: Check if this is part of a larger word in the original text
+                    # Example: "b" detected at position 28 in "btw" 
+                    start_pos = result["start"]
+                    end_pos = result["end"]
+                    
+                    # Extract the actual text segment and check surrounding characters
+                    if start_pos > 0 and end_pos < len(text):
+                        # Look for word boundaries around the detection
+                        words_around = text[max(0, start_pos - 10):min(len(text), end_pos + 10)].split()
+                        for nearby_word in words_around:
+                            nearby_lower = nearby_word.lower().strip('.,!?;:@#')
+                            if slang_lower in nearby_lower and self._exists_in_dictionary(nearby_lower):
+                                # Found a complete slang word containing the partial detection
+                                normalized = self._lookup_slang(nearby_lower)
+                                logger.info(f"✅ Validated expanded slang: '{nearby_word}' → '{normalized}' (from partial '{slang_term}')")
+                                
+                                detected.append({
+                                    "text": nearby_word.strip('.,!?;:@#'),
+                                    "start": text.find(nearby_word),
+                                    "end": text.find(nearby_word) + len(nearby_word),
+                                    "normalized": normalized,
+                                    "original": nearby_lower,
+                                    "confidence": float(result["score"])
+                                })
+                                found_match = True
+                                break
+                    
+                    if not found_match:
+                        # Strategy 2: Multi-word detection - try to split and match individual words
+                        logger.debug(f"⚠️ '{slang_term}' not in dictionary - trying to split into individual words")
+                        words = slang_term.split()
+                        
+                        if len(words) > 1:
+                            # Check each word individually
+                            for word in words:
+                                word_lower = word.lower()
+                                if self._exists_in_dictionary(word_lower):
+                                    normalized = self._lookup_slang(word_lower)
+                                    logger.info(f"✅ Validated split slang: '{word}' → '{normalized}' (from multi-word '{slang_term}')")
+                                    
+                                    # Calculate approximate position for the individual word
+                                    word_start = result["start"] + slang_term.find(word)
+                                    word_end = word_start + len(word)
+                                    
+                                    detected.append({
+                                        "text": word,
+                                        "start": word_start,
+                                        "end": word_end,
+                                        "normalized": normalized,
+                                        "original": word_lower,
+                                        "confidence": float(result["score"])
+                                    })
+                                    found_match = True
+                                else:
+                                    logger.debug(f"❌ Split word '{word}' not in dictionary either")
+                        
+                        if not found_match:
+                            logger.debug(f"❌ Skipping '{slang_term}' - not in slang dictionary (confidence: {result['score']:.2f})")
             
+            logger.info(f"🎯 Final detected slang count: {len(detected)}")
             return detected
             
         except Exception as e:

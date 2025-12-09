@@ -73,8 +73,8 @@ class TextPreprocessor:
         # Step 3: Clean text
         text = self.clean_text(text)
         
-        # Step 4: Expand slang
-        text = self.expand_slang(text)
+        # Step 4: Expand slang - REMOVED - now handled by RoBERTa SlangNormalizer
+        # text = self.expand_slang(text)
         
         return text, language
 
