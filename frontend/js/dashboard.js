@@ -546,10 +546,15 @@ class DashboardApp {
                         }</span>
                     </div>
                     <div class="account-actions">
-                        <button class="btn-secondary" onclick="window.dashboardApp.syncPosts(${
+                        <button id="sync-btn-${
                           account.id
-                        })" title="Fetch new posts only">
-                            <i class="fas fa-file-alt"></i> Sync Posts
+                        }" class="btn-secondary sync-posts-btn" onclick="window.dashboardApp.syncPosts(${
+            account.id
+          })" title="Fetch new posts only">
+                            <svg class="spinner" style="display: none;" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                            </svg>
+                            <i class="fas fa-download"></i> Sync Posts
                         </button>
                          
                     </div>
@@ -633,8 +638,13 @@ class DashboardApp {
         result.message || "Data synced successfully"
       );
 
-      // Refresh dashboard data to show new posts
-      if (this.currentDashboard && this.currentDashboard.refresh) {
+      // Only refresh dashboard if not on settings page
+      const currentHash = window.location.hash;
+      if (
+        currentHash !== "#settings" &&
+        this.currentDashboard &&
+        this.currentDashboard.refresh
+      ) {
         await this.currentDashboard.refresh();
       }
 
@@ -650,10 +660,43 @@ class DashboardApp {
    * Sync only posts (no replies)
    */
   async syncPosts(accountId) {
-    return this.syncAccount(accountId, {
-      fetchPosts: true,
-      fetchReplies: false,
-    });
+    const button = document.getElementById(`sync-btn-${accountId}`);
+    if (!button) {
+      return this.syncAccount(accountId, {
+        fetchPosts: true,
+        fetchReplies: false,
+      });
+    }
+
+    // Show loading state
+    const spinner = button.querySelector(".spinner");
+    const icon = button.querySelector(".fa-download");
+    const originalText = button.innerHTML;
+
+    button.disabled = true;
+    button.style.opacity = "0.6";
+    button.style.cursor = "not-allowed";
+
+    if (spinner) spinner.style.display = "inline-block";
+    if (icon) icon.style.display = "none";
+
+    try {
+      const result = await this.syncAccount(accountId, {
+        fetchPosts: true,
+        fetchReplies: false,
+      });
+
+      // Keep user on settings page - don't navigate
+      return result;
+    } finally {
+      // Reset button state
+      button.disabled = false;
+      button.style.opacity = "1";
+      button.style.cursor = "pointer";
+
+      if (spinner) spinner.style.display = "none";
+      if (icon) icon.style.display = "inline-block";
+    }
   }
 
   /**
