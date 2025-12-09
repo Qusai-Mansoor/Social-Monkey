@@ -895,45 +895,238 @@ def get_emotion_distribution(
 
 @router.get("/dashboard/slang-insights")
 def get_slang_insights(
+    date_range: int = 30,
+    platform: str = "all",
+    sort_by: str = "frequency",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get the most frequently used slang terms.
-    Returns: [{"term": "no cap", "count": 10, "meaning": "..."}, ...]
+    Get comprehensive Gen-Z slang insights with filtering and sorting.
+    
+    Params:
+    - date_range: Number of days to look back (7, 30, 90)
+    - platform: Filter by platform ('all', 'twitter', 'instagram')
+    - sort_by: Sort method ('frequency', 'engagement', 'growth')
+    
+    Returns comprehensive slang analytics including:
+    - Total slang terms count
+    - Total emoji count
+    - Top slang term
+    - Growth rate
+    - Detailed slang analysis with engagement metrics
+    - Platform usage breakdown
+    - Trend analysis
     """
     # Get user's social accounts
     account_ids = db.query(SocialAccount.id).filter(SocialAccount.user_id == current_user.id).all()
     account_ids = [id[0] for id in account_ids]
     
     if not account_ids:
-        return []
+        return {
+            "total_slang_count": 0,
+            "total_emoji_count": 0,
+            "top_slang_term": "N/A",
+            "growth_rate": 0,
+            "slang_analysis": [],
+            "platform_usage": {},
+            "trends": {}
+        }
 
-    # Fetch posts with detected slang
-    posts = db.query(Post.detected_slang)\
-        .filter(Post.social_account_id.in_(account_ids))\
-        .filter(Post.detected_slang != None).all()
+    # Calculate date range
+    start_date = datetime.now(timezone.utc) - timedelta(days=date_range)
+    mid_date = datetime.now(timezone.utc) - timedelta(days=date_range // 2)  # For growth calculation
     
-    slang_counts = {}
-    slang_meanings = {}
+    # Build query with filters
+    query = db.query(Post).filter(
+        Post.social_account_id.in_(account_ids),
+        Post.created_at >= start_date
+    )
     
+    # Apply platform filter
+    if platform != "all":
+        platform_account_ids = db.query(SocialAccount.id).filter(
+            SocialAccount.user_id == current_user.id,
+            SocialAccount.platform == platform
+        ).all()
+        platform_account_ids = [id[0] for id in platform_account_ids]
+        if platform_account_ids:
+            query = query.filter(Post.social_account_id.in_(platform_account_ids))
+    
+    posts = query.all()
+    
+    # Also get comments for comprehensive analysis
+    post_ids = [p.id for p in posts]
+    comments = []
+    if post_ids:
+        comments = db.query(Comment).filter(Comment.post_id.in_(post_ids)).all()
+    
+    # Combine content from posts and comments
+    all_content = [(p, 'post', p.content, p.detected_slang, p.created_at) for p in posts]
+    all_content += [(c, 'comment', c.content, c.detected_slang, c.created_at) for c in comments]
+    
+    # Analyze slang usage and emoji patterns
+    slang_data = {}  # {term: {count, meaning, posts, engagement, recent_count, older_count, emotions}}
+    emoji_pattern = re.compile(r'[\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]')
+    emoji_emotion_map = {}  # {emoji: {count, emotion}}
+    total_emoji_count = 0
+    
+    # First pass: collect data from posts only for engagement
+    post_slang_map = {}  # {term: [post_ids]}
     for post in posts:
-        # post.detected_slang is a list of dicts: [{"term": "no cap", "meaning": "..."}]
-        if post.detected_slang:
-            for item in post.detected_slang: 
-                term = item.get('term')
+        if post.detected_slang and isinstance(post.detected_slang, list):
+            for slang_item in post.detected_slang:
+                term = slang_item.get('term')
                 if term:
-                    slang_counts[term] = slang_counts.get(term, 0) + 1
-                    if term not in slang_meanings:
-                        slang_meanings[term] = item.get('meaning', '')
-            
-    # Sort by count descending
-    sorted_slang = sorted(slang_counts.items(), key=lambda x: x[1], reverse=True)
+                    if term not in post_slang_map:
+                        post_slang_map[term] = []
+                    post_slang_map[term].append(post.id)
     
-    return [
-        {"term": term, "count": count, "meaning": slang_meanings.get(term, "")} 
-        for term, count in sorted_slang[:20]  # Top 20
+    for item, item_type, content, detected_slang, created_at in all_content:
+        # Count emojis and map to emotions
+        emojis = emoji_pattern.findall(content)
+        total_emoji_count += len(emojis)
+        
+        # Map emojis to emotions (from post/comment emotion data)
+        for emoji in emojis:
+            if emoji not in emoji_emotion_map:
+                emoji_emotion_map[emoji] = {'count': 0, 'emotion': 'neutral'}
+            emoji_emotion_map[emoji]['count'] += 1
+            
+            # Try to associate emoji with the dominant emotion of the content
+            if item_type == 'post' and hasattr(item, 'dominant_emotion') and item.dominant_emotion:
+                emoji_emotion_map[emoji]['emotion'] = item.dominant_emotion
+            elif item_type == 'comment' and hasattr(item, 'dominant_emotion') and item.dominant_emotion:
+                emoji_emotion_map[emoji]['emotion'] = item.dominant_emotion
+        
+        # Process detected slang
+        if detected_slang and isinstance(detected_slang, list):
+            for slang_item in detected_slang:
+                term = slang_item.get('term')
+                meaning = slang_item.get('meaning', '')
+                
+                if term:
+                    if term not in slang_data:
+                        slang_data[term] = {
+                            'count': 0,
+                            'meaning': meaning,
+                            'posts': set(),
+                            'engagement': 0,
+                            'recent_count': 0,
+                            'older_count': 0,
+                            'emotions': []  # Track emotions from BERTweet
+                        }
+                    
+                    slang_data[term]['count'] += 1
+                    
+                    # Track emotion from BERTweet analysis
+                    if item_type == 'post' and hasattr(item, 'dominant_emotion') and item.dominant_emotion:
+                        slang_data[term]['emotions'].append(item.dominant_emotion)
+                    elif item_type == 'comment' and hasattr(item, 'dominant_emotion') and item.dominant_emotion:
+                        slang_data[term]['emotions'].append(item.dominant_emotion)
+                    
+                    # Track growth (count all occurrences for trend)
+                    if created_at >= mid_date:
+                        slang_data[term]['recent_count'] += 1
+                    else:
+                        slang_data[term]['older_count'] += 1
+    
+    # Second pass: calculate engagement for posts containing each slang
+    for term in slang_data:
+        if term in post_slang_map:
+            post_ids = post_slang_map[term]
+            slang_data[term]['posts'] = set(post_ids)
+            
+            # Calculate total engagement for posts with this slang
+            for post in posts:
+                if post.id in post_ids:
+                    slang_data[term]['engagement'] += calculate_engagement(post)
+    
+    # Calculate metrics for each slang term
+    slang_analysis = []
+    for term, data in slang_data.items():
+        # Calculate growth percentage
+        # Calculate average engagement per post
+        avg_engagement = data['engagement'] / len(data['posts']) if data['posts'] else 0
+        
+        # Determine dominant emotion for this slang term
+        dominant_emotion = 'neutral'
+        if data['emotions']:
+            # Count emotion occurrences and get most common
+            from collections import Counter
+            emotion_counter = Counter(data['emotions'])
+            dominant_emotion = emotion_counter.most_common(1)[0][0]
+        
+        # Calculate growth percentage
+        if data['older_count'] > 0:
+            growth = ((data['recent_count'] - data['older_count']) / data['older_count']) * 100
+        else:
+            growth = 0 if data['recent_count'] == 0 else 100
+        
+        slang_analysis.append({
+            'term': term,
+            'meaning': data['meaning'],
+            'usage_count': data['count'],
+            'posts': len(data['posts']),
+            'avg_engagement': round(avg_engagement, 2),
+            'growth': round(growth, 1),
+            'emotion': dominant_emotion
+        })
+    
+    # Sort based on sort_by parameter
+    if sort_by == 'frequency':
+        slang_analysis.sort(key=lambda x: x['usage_count'], reverse=True)
+    elif sort_by == 'engagement':
+        slang_analysis.sort(key=lambda x: x['avg_engagement'], reverse=True)
+    elif sort_by == 'growth':
+        slang_analysis.sort(key=lambda x: x['growth'], reverse=True)
+    
+    # Calculate overall growth rate
+    total_recent = sum(d['recent_count'] for d in slang_data.values())
+    total_older = sum(d['older_count'] for d in slang_data.values())
+    overall_growth = ((total_recent - total_older) / total_older * 100) if total_older > 0 else 0
+    
+    # Platform usage breakdown
+    platform_usage = {}
+    for platform_name in ['twitter', 'instagram']:
+        platform_posts = [p for p in posts if p.social_account and p.social_account.platform == platform_name]
+        platform_posts_with_slang = [
+            p for p in platform_posts 
+            if p.detected_slang and isinstance(p.detected_slang, list) and len(p.detected_slang) > 0
+        ]
+        
+        if len(platform_posts) > 0:
+            percentage = (len(platform_posts_with_slang) / len(platform_posts)) * 100
+            platform_usage[platform_name] = {
+                'total': len(platform_posts),
+                'with_slang': len(platform_posts_with_slang),
+                'percentage': round(percentage, 1)
+            }
+    
+    # Calculate total slang terms (sum of all frequencies)
+    total_slang_count = sum(data['count'] for data in slang_data.values())
+    
+    # Get top slang term
+    top_slang_term = slang_analysis[0]['term'] if slang_analysis else "N/A"
+    
+    # Format emoji emotion map for frontend
+    emoji_data = [
+        {
+            'emoji': emoji,
+            'count': data['count'],
+            'emotion': data['emotion']
+        }
+        for emoji, data in sorted(emoji_emotion_map.items(), key=lambda x: x[1]['count'], reverse=True)[:20]
     ]
+    
+    return {
+        "total_slang_count": total_slang_count,
+        "total_emoji_count": total_emoji_count,
+        "top_slang_term": top_slang_term,
+        "slang_analysis": slang_analysis,
+        "emoji_emotion_map": emoji_data,
+        "unique_terms": len(slang_data)
+    }
 
 @router.get("/dashboard/negative-triggers")
 def get_negative_triggers(
