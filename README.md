@@ -30,7 +30,13 @@ An AI-driven emotion-aware social media analytics platform that provides deep se
 - **ORM**: SQLAlchemy 2.0.23
 - **Authentication**: JWT (PyJWT 2.8.0) + OAuth 2.0 PKCE
 - **Security**: Fernet encryption for tokens, bcrypt for passwords
-- **Social API**: Twitter API v2 via Tweepy 4.14.0
+- **Social API**:
+  - **Twitter OAuth 2.0**: User authentication and authorization
+  - **RapidAPI (twitter-api45)**: Data ingestion for tweets and threads
+    - Endpoint: `https://twitter-api45.p.rapidapi.com`
+    - Features: Timeline fetch, thread retrieval, user profiles
+    - Rate: Up to 100 tweets per request
+- **HTTP Client**: httpx 0.27.2 (async)
 - **NLP Utils**: LangDetect 1.0.9, Emoji 2.8.0
 - **Testing**: pytest with 83 test cases (100% pass rate)
 
@@ -214,15 +220,37 @@ DATABASE_URL=postgresql://user:password@localhost:5432/socialmonkey
 SECRET_KEY=your-secret-key-here-min-32-chars
 ENCRYPTION_KEY=your-fernet-encryption-key-here
 
-# Twitter OAuth 2.0
+# Twitter OAuth 2.0 (for authentication)
 TWITTER_CLIENT_ID=your-twitter-client-id
 TWITTER_CLIENT_SECRET=your-twitter-client-secret
-TWITTER_REDIRECT_URI=http://localhost:8000/api/v1/oauth/twitter/callback
+TWITTER_CALLBACK_URL=http://localhost:8000/api/v1/oauth/twitter/callback
+TWITTER_BEARER_TOKEN=your-twitter-bearer-token
+
+# RapidAPI Twitter (for data ingestion)
+RAPIDAPI_KEY=your-rapidapi-key-here
+RAPIDAPI_TWITTER_HOST=twitter-api45.p.rapidapi.com
 
 # AI Model
-EMOTION_MODEL_PATH=SamLowe/roberta-base-go_emotions
-# Or use your fine-tuned BERTweet model path
+EMOTION_MODEL_PATH=./models/bertweet_goemotions
+EMOTION_MODEL_THRESHOLD=0.3
+EMOTION_MODEL_MAX_LENGTH=128
 ```
+
+#### Getting RapidAPI Credentials
+
+1. Visit [RapidAPI Hub](https://rapidapi.com/)
+2. Sign up or log in to your account
+3. Subscribe to the **"Unofficial Twitter API"** (search for `twitter-api45`)
+4. Copy your `X-RapidAPI-Key` from the API dashboard
+5. Add it to your `.env` file as `RAPIDAPI_KEY`
+
+**Available Endpoints:**
+
+- `/timeline.php` - Fetch user timeline tweets (up to 100 tweets)
+- `/tweet_thread.php` - Fetch tweet thread/replies by tweet ID
+- `/user.php` - Fetch user profile information
+
+**Rate Limits:** Check your RapidAPI subscription plan for specific limits.
 
 ### 4. Database Setup
 

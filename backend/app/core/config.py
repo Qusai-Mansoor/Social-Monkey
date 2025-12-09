@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     TWITTER_CALLBACK_URL: str
     TWITTER_BEARER_TOKEN: str
     
+    # RapidAPI Twitter Configuration
+    RAPIDAPI_KEY: str
+    RAPIDAPI_TWITTER_HOST: str = "twitter-api45.p.rapidapi.com"
+    
     # Instagram OAuth Configuration
     INSTAGRAM_CLIENT_ID: str
     INSTAGRAM_CLIENT_SECRET: str
