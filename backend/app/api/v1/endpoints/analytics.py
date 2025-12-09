@@ -937,38 +937,149 @@ def get_slang_insights(
 
 @router.get("/dashboard/negative-triggers")
 def get_negative_triggers(
+    date_range: int = 30,
+    platform: str = "all",
+    severity: str = "all",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get posts that triggered negative emotions (anger, sadness, disgust).
+    Get posts that triggered negative emotions based on comment analysis.
+    A post is flagged as negative if >= 25% of its comments have negative emotions.
+    
+    Params:
+    - date_range: Number of days to look back (default: 30)
+    - platform: Filter by platform ('all', 'twitter', 'facebook', etc.)
+    - severity: Filter by severity level ('all', 'high', 'medium', 'low')
     """
     # Get user's social accounts
     account_ids = db.query(SocialAccount.id).filter(SocialAccount.user_id == current_user.id).all()
     account_ids = [id[0] for id in account_ids]
 
     if not account_ids:
-        return []
-
-    negative_emotions = ['anger', 'sadness', 'disgust', 'disappointment', 'annoyance']
-
-    posts = db.query(Post)\
-        .filter(Post.social_account_id.in_(account_ids))\
-        .filter(Post.dominant_emotion.in_(negative_emotions))\
-        .order_by(desc(Post.created_at))\
-        .limit(20)\
-        .all()
-
-    return [
-        {
-            "id": post.id,
-            "content": post.content,
-            "dominant_emotion": post.dominant_emotion,
-            "emotion_scores": post.emotion_scores,
-            "created_at": post.created_at
+        return {
+            "negativeTriggers": [],
+            "topPosts": [],
+            "stats": {
+                "totalNegative": 0,
+                "negativeRate": 0,
+                "highSeverityCount": 0,
+                "mediumSeverityCount": 0,
+                "lowSeverityCount": 0
+            }
         }
-        for post in posts
-    ]
+
+    # Define negative emotions
+    negative_emotions = ['anger', 'sadness', 'disgust', 'disappointment', 'annoyance', 'fear', 'disapproval']
+    
+    # Calculate date range
+    start_date = datetime.now(timezone.utc) - timedelta(days=date_range)
+    
+    # Build base query for posts
+    posts_query = db.query(Post).filter(
+        Post.social_account_id.in_(account_ids),
+        Post.created_at >= start_date
+    )
+    
+    # Apply platform filter if specified
+    if platform != "all":
+        # Get account IDs for the specific platform
+        platform_account_ids = db.query(SocialAccount.id).filter(
+            SocialAccount.user_id == current_user.id,
+            SocialAccount.platform == platform
+        ).all()
+        platform_account_ids = [id[0] for id in platform_account_ids]
+        posts_query = posts_query.filter(Post.social_account_id.in_(platform_account_ids))
+    
+    posts = posts_query.all()
+    
+    # Analyze each post based on its comments
+    negative_threshold = 0.25  # 25% of comments must be negative
+    triggered_posts = []
+    
+    for post in posts:
+        # Get all comments for this post
+        comments = db.query(Comment).filter(Comment.post_id == post.id).all()
+        
+        if not comments or len(comments) == 0:
+            continue
+        
+        # Calculate percentage of negative comments
+        negative_comment_count = sum(
+            1 for c in comments 
+            if c.dominant_emotion and c.dominant_emotion in negative_emotions
+        )
+        
+        negative_percentage = negative_comment_count / len(comments) if len(comments) > 0 else 0
+        
+        # Only flag if negative percentage exceeds threshold
+        if negative_percentage >= negative_threshold:
+            # Calculate trigger score based on engagement and negative percentage
+            engagement = calculate_engagement(post)
+            trigger_score = (negative_percentage * 100) + (engagement * 0.1)
+            
+            # Determine severity based on negative percentage
+            if negative_percentage >= 0.6:  # 60%+ negative
+                severity_level = 'high'
+            elif negative_percentage >= 0.4:  # 40-60% negative
+                severity_level = 'medium'
+            else:  # 25-40% negative
+                severity_level = 'low'
+            
+            triggered_posts.append({
+                "id": post.id,
+                "content": post.content,
+                "platform": post.social_account.platform if post.social_account else "twitter",
+                "created_at": post.created_at_platform.isoformat() if post.created_at_platform else post.created_at.isoformat(),
+                "likes_count": post.likes_count or 0,
+                "retweets_count": post.retweets_count or 0,
+                "replies_count": post.replies_count or 0,
+                "engagement": engagement,
+                "dominant_emotion": post.dominant_emotion,
+                "emotion_scores": post.emotion_scores,
+                "triggerScore": trigger_score,
+                "severity": severity_level,
+                "negativePercentage": negative_percentage * 100,
+                "totalComments": len(comments),
+                "negativeComments": negative_comment_count
+            })
+    
+    # Sort by trigger score
+    triggered_posts.sort(key=lambda x: x['triggerScore'], reverse=True)
+    
+    # Apply severity filter
+    if severity != "all":
+        triggered_posts = [p for p in triggered_posts if p['severity'] == severity]
+    
+    # Calculate stats
+    total_posts = len(posts)
+    total_negative = len(triggered_posts)
+    negative_rate = (total_negative / total_posts * 100) if total_posts > 0 else 0
+    
+    high_severity = sum(1 for p in triggered_posts if p['severity'] == 'high')
+    medium_severity = sum(1 for p in triggered_posts if p['severity'] == 'medium')
+    low_severity = sum(1 for p in triggered_posts if p['severity'] == 'low')
+    
+    return {
+        "negativeTriggers": triggered_posts,
+        "topPosts": [
+            {
+                "id": p.id,
+                "content": p.content,
+                "platform": p.social_account.platform if p.social_account else "twitter",
+                "created_at": p.created_at_platform.isoformat() if p.created_at_platform else p.created_at.isoformat(),
+                "engagement": calculate_engagement(p)
+            }
+            for p in posts[:20]
+        ],
+        "stats": {
+            "totalNegative": total_negative,
+            "negativeRate": round(negative_rate, 1),
+            "highSeverityCount": high_severity,
+            "mediumSeverityCount": medium_severity,
+            "lowSeverityCount": low_severity
+        }
+    }
 
 @router.get("/post-comments/{post_id}")
 def get_post_comments(
@@ -1069,3 +1180,127 @@ def get_post_comments(
     except Exception as e:
         print(f"Error getting post comments: {e}")
         raise HTTPException(status_code=500, detail=f"Error retrieving comments: {str(e)}")
+
+
+@router.get("/post-negative-comments/{post_id}")
+def get_post_negative_comments(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all negative comments for a specific post with detailed emotion analysis.
+    Returns comments that have negative emotions (anger, sadness, disgust, etc.)
+    """
+    try:
+        # Get user's social accounts
+        account_ids = db.query(SocialAccount.id).filter(
+            SocialAccount.user_id == current_user.id
+        ).all()
+        account_ids = [id[0] for id in account_ids]
+
+        if not account_ids:
+            return {
+                "post": None,
+                "negativeComments": [],
+                "totalComments": 0,
+                "negativeCount": 0,
+                "negativePercentage": 0,
+                "stats": {},
+                "error": "No social accounts found"
+            }
+
+        # Verify the post belongs to the user
+        post = db.query(Post).filter(
+            Post.id == post_id,
+            Post.social_account_id.in_(account_ids)
+        ).first()
+
+        if not post:
+            raise HTTPException(status_code=404, detail="Post not found")
+
+        # Define negative emotions
+        negative_emotions = ['anger', 'sadness', 'disgust', 'disappointment', 'annoyance', 'fear', 'disapproval', 'embarrassment', 'grief', 'nervousness', 'remorse']
+
+        # Get all comments for this post
+        all_comments = db.query(Comment).filter(
+            Comment.post_id == post_id
+        ).all()
+
+        # Filter for negative comments
+        negative_comments = [
+            c for c in all_comments 
+            if c.dominant_emotion and c.dominant_emotion in negative_emotions
+        ]
+
+        # Sort by sentiment score (most negative first)
+        negative_comments.sort(
+            key=lambda x: x.sentiment_score if x.sentiment_score is not None else 0
+        )
+
+        # Format post data
+        post_data = {
+            "id": post.id,
+            "content": post.content,
+            "platform": post.social_account.platform if post.social_account else "twitter",
+            "created_at_platform": post.created_at_platform.isoformat() if post.created_at_platform else None,
+            "likes_count": post.likes_count or 0,
+            "retweets_count": post.retweets_count or 0,
+            "replies_count": post.replies_count or 0,
+            "dominant_emotion": post.dominant_emotion,
+            "emotion_scores": post.emotion_scores,
+            "sentiment_score": post.sentiment_score
+        }
+
+        # Format negative comments data
+        comments_data = []
+        total_likes = 0
+        sentiment_scores = []
+        emotion_counts = {}
+        
+        for comment in negative_comments:
+            # Add to stats calculations
+            total_likes += comment.likes_count or 0
+            if comment.sentiment_score is not None:
+                sentiment_scores.append(comment.sentiment_score)
+            if comment.dominant_emotion:
+                emotion_counts[comment.dominant_emotion] = emotion_counts.get(comment.dominant_emotion, 0) + 1
+            
+            comments_data.append({
+                "id": comment.id,
+                "author_username": comment.author_username,
+                "content": comment.content,
+                "created_at_platform": comment.created_at_platform.isoformat() if comment.created_at_platform else None,
+                "likes_count": comment.likes_count or 0,
+                "dominant_emotion": comment.dominant_emotion,
+                "emotion_scores": comment.emotion_scores,
+                "sentiment_score": comment.sentiment_score,
+                "detected_slang": comment.detected_slang
+            })
+
+        # Calculate aggregate stats
+        total_comments_count = len(all_comments)
+        negative_count = len(negative_comments)
+        negative_percentage = (negative_count / total_comments_count * 100) if total_comments_count > 0 else 0
+
+        stats = {
+            "totalComments": total_comments_count,
+            "negativeCount": negative_count,
+            "negativePercentage": round(negative_percentage, 1),
+            "totalLikes": total_likes,
+            "avgSentiment": sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0,
+            "dominantEmotion": max(emotion_counts.items(), key=lambda x: x[1])[0] if emotion_counts else "neutral",
+            "emotionBreakdown": emotion_counts
+        }
+
+        return {
+            "post": post_data,
+            "negativeComments": comments_data,
+            "stats": stats
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting negative comments: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving negative comments: {str(e)}")
