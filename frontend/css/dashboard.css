@@ -590,3 +590,26 @@ body {
   color: var(--accent-purple);
   opacity: 0.8;
 }
+
+/* ========================================
+   SYNC BUTTON LOADING ANIMATION
+   ======================================== */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sync-posts-btn .spinner {
+  animation: spin 1s linear infinite;
+  margin-right: 6px;
+}
+
+.sync-posts-btn:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+}

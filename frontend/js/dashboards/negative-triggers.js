@@ -1,444 +1,494 @@
 /**
  * Negative Triggers Dashboard
- * Identifies and analyzes posts that triggered negative reactions
+ * Identifies and analyzes posts that triggered negative reactions based on comment emotions
  */
 
-import DataLoader from '../components/data-loader.js';
-import ChartManager from '../components/chart-manager.js';
-import StatCards from '../components/stat-cards.js';
+import DataLoader from "../components/data-loader.js";
+import ChartManager from "../components/chart-manager.js";
+import StatCards from "../components/stat-cards.js";
 
 class NegativeTriggersBoard {
-    constructor() {
-        this.dataLoader = window.dataLoader || new DataLoader();
-        this.chartManager = window.chartManager || new ChartManager();
-        this.statCards = window.statCards || new StatCards();
-        this.data = null;
-        this.filters = {
-            dateRange: 30,
-            platform: 'all',
-            severity: 'all' // all, high, medium, low
-        };
-        this.boundHandlers = {};
+  constructor() {
+    this.dataLoader = window.dataLoader || new DataLoader();
+    this.chartManager = window.chartManager || new ChartManager();
+    this.statCards = window.statCards || new StatCards();
+    this.data = null;
+    this.filters = {
+      dateRange: 30,
+      platform: "all",
+      severity: "all",
+    };
+    this.boundHandlers = {};
+  }
+
+  /**
+   * Render the negative triggers dashboard
+   */
+  async render() {
+    const container = document.getElementById("main-content");
+    if (!container) return;
+
+    container.innerHTML = this.getLoadingHTML();
+
+    try {
+      this.data = await this.loadData();
+      container.innerHTML = this.getHTML();
+      this.initializeComponents();
+    } catch (error) {
+      console.error("Error loading negative triggers dashboard:", error);
+      container.innerHTML = this.getErrorHTML(error.message);
+    }
+  }
+
+  /**
+   * Load all necessary data
+   */
+  async loadData() {
+    try {
+      const data = await this.dataLoader.loadNegativeTriggersData(
+        this.filters.dateRange,
+        this.filters.platform,
+        this.filters.severity
+      );
+
+      console.log("Raw API Response:", data);
+
+      return {
+        negativeTriggers: data.negativeTriggers || [],
+        stats: data.stats || this.getDefaultStats(),
+      };
+    } catch (error) {
+      console.error("Error loading negative triggers data:", error);
+      return {
+        negativeTriggers: [],
+        stats: this.getDefaultStats(),
+      };
+    }
+  }
+
+  /**
+   * Get default stats structure
+   */
+  getDefaultStats() {
+    return {
+      totalNegative: 0,
+      negativeRate: 0,
+      highSeverityCount: 0,
+      mediumSeverityCount: 0,
+      lowSeverityCount: 0,
+    };
+  }
+
+  /**
+   * Initialize components
+   */
+  initializeComponents() {
+    this.renderStatCards();
+    this.renderSeverityChart();
+    this.attachEventListeners();
+    this.attachPostCommentListeners();
+  }
+
+  /**
+   * Render stat cards
+   */
+  renderStatCards() {
+    const statsContainer = document.querySelector(".stats-grid");
+    if (!statsContainer || !this.data) return;
+
+    const stats = this.data.stats;
+
+    const cards = [
+      this.statCards.createCard(
+        "Negative Posts",
+        this.statCards.formatNumber(stats.totalNegative),
+        "Based on comment negativity",
+        "alert-triangle",
+        "negative"
+      ),
+      this.statCards.createCard(
+        "Negative Rate",
+        stats.negativeRate + "%",
+        "Of total posts",
+        "trending-down",
+        stats.negativeRate > 30 ? "negative" : "neutral"
+      ),
+      this.statCards.createCard(
+        "High Severity Triggers",
+        this.statCards.formatNumber(stats.highSeverityCount),
+        "60%+ negative comments",
+        "alert-circle",
+        "negative"
+      ),
+    ];
+
+    statsContainer.innerHTML = cards.join("");
+  }
+
+  /**
+   * Render severity distribution chart
+   */
+  renderSeverityChart() {
+    if (!this.data) return;
+
+    const stats = this.data.stats;
+    console.log("Severity Distribution Stats:", stats);
+    console.log("Negative Triggers:", this.data.negativeTriggers);
+
+    // Check if we have any data to display
+    const total =
+      stats.highSeverityCount +
+      stats.mediumSeverityCount +
+      stats.lowSeverityCount;
+
+    if (total === 0) {
+      // Display a message if no data
+      const canvas = document.getElementById("severityChart");
+      if (canvas) {
+        const container = canvas.parentElement;
+        container.innerHTML = `
+          <div style="text-align: center; padding: 60px 20px; color: rgba(255, 255, 255, 0.5);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 16px; opacity: 0.5;">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <p style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">No Negative Triggers Found</p>
+            <p style="font-size: 14px; margin-top: 8px;">No posts with ≥25% negative comments in the selected period</p>
+            <p style="font-size: 13px; margin-top: 4px; opacity: 0.7;">Try changing the date range or filters</p>
+          </div>
+        `;
+      }
+      return;
     }
 
-    /**
-     * Render the negative triggers dashboard
-     */
-    async render() {
-        const container = document.getElementById('main-content');
-        if (!container) return;
+    const chartData = {
+      labels: ["High Severity", "Medium Severity", "Low Severity"],
+      datasets: [
+        {
+          data: [
+            stats.highSeverityCount,
+            stats.mediumSeverityCount,
+            stats.lowSeverityCount,
+          ],
+          backgroundColor: ["#EF4444", "#F59E0B", "#10B981"],
+          borderWidth: 0,
+          hoverOffset: 10,
+        },
+      ],
+    };
 
-        container.innerHTML = this.getLoadingHTML();
+    // Use createPieChart for Chart.js formatted data
+    this.chartManager.createPieChart("severityChart", chartData);
+  }
 
-        try {
-            this.data = await this.loadData();
-            container.innerHTML = this.getHTML();
-            this.initializeComponents();
-        } catch (error) {
-            console.error('Error loading negative triggers dashboard:', error);
-            container.innerHTML = this.getErrorHTML(error.message);
-        }
+  /**
+   * Attach event listeners
+   */
+  attachEventListeners() {
+    this.removeEventListeners();
+
+    // Date range filter
+    const dateRangeSelect = document.getElementById("dateRangeFilter");
+    if (dateRangeSelect) {
+      this.boundHandlers.dateRange = (e) =>
+        this.handleDateRangeChange(parseInt(e.target.value));
+      dateRangeSelect.addEventListener("change", this.boundHandlers.dateRange);
     }
 
-    /**
-     * Load all necessary data
-     */
-    async loadData() {
-        try {
-            // Fetch real negative triggers from API
-            const [negativeTriggers, topPosts] = await Promise.all([
-                window.api.request('/api/v1/analytics/dashboard/negative-triggers'),
-                window.api.getTopPosts(50)
-            ]);
-
-            // Format negative triggers for the dashboard
-            // The API returns { id, content, dominant_emotion, emotion_scores, created_at }
-            // We need to map this to the format expected by processNegativeData or use it directly
-            
-            // For now, let's merge the negative triggers into the topPosts array so processNegativeData can find them
-            // Or better, let's adjust processNegativeData to use the specific negative triggers list if available
-            
-            return {
-                emotionAnalysis: { emotions: { negative: negativeTriggers.length } }, // Dummy count for now
-                topPosts: topPosts,
-                negativeTriggers: negativeTriggers, // Pass the specific list
-                engagementTrends: [], // We can fetch this if needed
-                processedStats: this.processNegativeData({ 
-                    emotionAnalysis: { emotions: { negative: negativeTriggers.length } }, 
-                    topPosts, 
-                    negativeTriggers 
-                })
-            };
-        } catch (error) {
-            console.error('Error loading negative triggers data:', error);
-            return {
-                emotionAnalysis: {},
-                topPosts: [],
-                negativeTriggers: [],
-                engagementTrends: [],
-                processedStats: this.getDefaultStats()
-            };
-        }
+    // Platform filter
+    const platformSelect = document.getElementById("platformFilter");
+    if (platformSelect) {
+      this.boundHandlers.platform = (e) =>
+        this.handlePlatformFilter(e.target.value);
+      platformSelect.addEventListener("change", this.boundHandlers.platform);
     }
 
-    /**
-     * Process data to identify negative triggers
-     */
-    processNegativeData(data) {
-        const { topPosts, negativeTriggers } = data;
-
-        // Use the specific negative triggers list if available, otherwise filter topPosts
-        let negativePosts = negativeTriggers || [];
-        
-        if (negativePosts.length === 0 && topPosts) {
-             negativePosts = topPosts.filter(p => p.emotion === 'negative' || p.sentiment_label === 'negative');
-        }
-        
-        // Calculate severity based on engagement and emotion intensity
-        const triggersWithSeverity = negativePosts.map(post => {
-            // Calculate engagement if not present (negativeTriggers endpoint might not return it yet)
-            const engagement = post.engagement || (post.likes_count || 0) + (post.retweets_count || 0) + (post.replies_count || 0);
-            const severity = engagement > 100 ? 'high' : engagement > 50 ? 'medium' : 'low';
-            
-            return {
-                ...post,
-                engagement,
-                severity,
-                triggerScore: this.calculateTriggerScore(post)
-            };
-        }).sort((a, b) => b.triggerScore - a.triggerScore);
-
-        // Group by severity
-        const bySeverity = {
-            high: triggersWithSeverity.filter(p => p.severity === 'high'),
-            medium: triggersWithSeverity.filter(p => p.severity === 'medium'),
-            low: triggersWithSeverity.filter(p => p.severity === 'low')
-        };
-
-        // Identify common trigger words
-        const triggerWords = this.extractTriggerWords(negativePosts);
-
-        // Calculate stats
-        const totalNegative = negativePosts.length;
-        const totalPosts = topPosts.length;
-        const negativeRate = totalPosts > 0 ? ((totalNegative / totalPosts) * 100).toFixed(1) : 0;
-        const avgEngagement = negativePosts.reduce((sum, p) => sum + (p.engagement || 0), 0) / (totalNegative || 1);
-
-        return {
-            totalNegative,
-            negativeRate,
-            avgEngagement,
-            highSeverityCount: bySeverity.high.length,
-            mediumSeverityCount: bySeverity.medium.length,
-            lowSeverityCount: bySeverity.low.length,
-            triggersWithSeverity,
-            bySeverity,
-            triggerWords,
-            changeMetrics: {
-                negativeChange: '+15%',
-                engagementChange: '-8%',
-                severityChange: '+23%'
-            }
-        };
+    // Severity filter
+    const severitySelect = document.getElementById("severityFilter");
+    if (severitySelect) {
+      this.boundHandlers.severity = (e) =>
+        this.handleSeverityFilter(e.target.value);
+      severitySelect.addEventListener("change", this.boundHandlers.severity);
     }
 
-    /**
-     * Calculate trigger score for a post
-     */
-    calculateTriggerScore(post) {
-        const engagement = post.engagement || 0;
-        const replies = post.replies_count || 0;
-        const retweets = post.retweets_count || 0;
-        
-        // Higher replies/retweets on negative content = higher trigger score
-        return (replies * 3) + (retweets * 2) + (engagement * 0.1);
+    // Export button
+    const exportBtn = document.getElementById("exportTriggersCSV");
+    if (exportBtn) {
+      this.boundHandlers.export = () => this.exportToCSV();
+      exportBtn.addEventListener("click", this.boundHandlers.export);
     }
 
-    /**
-     * Extract common trigger words from negative posts
-     */
-    extractTriggerWords(posts) {
-        const wordFreq = {};
-        const stopWords = new Set(['the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with', 'to', 'for', 'of', 'as', 'by', 'this', 'that']);
-
-        posts.forEach(post => {
-            const words = (post.content || '').toLowerCase()
-                .replace(/[^\w\s]/g, '')
-                .split(/\s+/)
-                .filter(w => w.length > 3 && !stopWords.has(w));
-
-            words.forEach(word => {
-                wordFreq[word] = (wordFreq[word] || 0) + 1;
-            });
-        });
-
-        return Object.entries(wordFreq)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([word, count]) => ({ word, count }));
+    // Refresh button
+    const refreshBtn = document.getElementById("refreshTriggers");
+    if (refreshBtn) {
+      this.boundHandlers.refresh = () => this.refresh();
+      refreshBtn.addEventListener("click", this.boundHandlers.refresh);
     }
+  }
 
-    /**
-     * Initialize components
-     */
-    initializeComponents() {
-        this.renderStatCards();
-        this.renderSeverityChart();
-        this.renderTriggerWordsChart();
-        this.attachEventListeners();
+  /**
+   * Attach listeners for view negative comments buttons
+   */
+  attachPostCommentListeners() {
+    const viewCommentsButtons = document.querySelectorAll(
+      ".view-negative-comments-btn"
+    );
+    viewCommentsButtons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const postId = parseInt(e.target.dataset.postId);
+        this.showNegativeComments(postId);
+      });
+    });
+  }
+
+  /**
+   * Show negative comments for a post
+   */
+  async showNegativeComments(postId) {
+    try {
+      const commentsData = await this.dataLoader.loadPostNegativeComments(
+        postId
+      );
+      this.displayCommentsModal(commentsData);
+    } catch (error) {
+      console.error("Error loading negative comments:", error);
+      alert("Failed to load negative comments. Please try again.");
     }
+  }
 
-    /**
-     * Render stat cards
-     */
-    renderStatCards() {
-        const statsContainer = document.querySelector('.stats-grid');
-        if (!statsContainer || !this.data) return;
+  /**
+   * Display comments in a modal
+   */
+  displayCommentsModal(commentsData) {
+    const { post, negativeComments, stats } = commentsData;
 
-        const stats = this.data.processedStats;
-        
-        const cards = [
-            this.statCards.createCard(
-                'Negative Posts',
-                this.statCards.formatNumber(stats.totalNegative),
-                stats.changeMetrics.negativeChange + ' from last period',
-                'alert-triangle',
-                'negative'
-            ),
-            this.statCards.createCard(
-                'Negative Rate',
-                stats.negativeRate + '%',
-                'Of total posts',
-                'trending-down',
-                stats.negativeRate > 30 ? 'negative' : 'neutral'
-            ),
-            this.statCards.createCard(
-                'High Severity Triggers',
-                this.statCards.formatNumber(stats.highSeverityCount),
-                stats.changeMetrics.severityChange + ' from last period',
-                'alert-circle',
-                'negative'
-            )
-        ];
+    // Create modal
+    const modal = document.createElement("div");
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+            <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+                <div class="modal-header">
+                    <h2>Negative Comments Analysis</h2>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
 
-        statsContainer.innerHTML = cards.join('');
-    }
+                <!-- Post Info -->
+                <div class="post-info-card">
+                    <h3>Original Post</h3>
+                    <p>${this.escapeHtml(post.content)}</p>
+                    <div class="post-meta">
+                        <span>${new Date(
+                          post.created_at_platform
+                        ).toLocaleDateString()}</span>
+                        <span>•</span>
+                        <span>${post.platform}</span>
+                        <span>•</span>
+                        <span>${post.likes_count || 0} likes</span>
+                    </div>
+                </div>
 
-    /**
-     * Render severity distribution chart
-     */
-    renderSeverityChart() {
-        if (!this.data) return;
+                <!-- Stats Cards -->
+                <div class="comments-stats-grid">
+                    <div class="stat-mini-card">
+                        <h4>Total Comments</h4>
+                        <p class="stat-value">${stats.totalComments}</p>
+                    </div>
+                    <div class="stat-mini-card negative">
+                        <h4>Negative Comments</h4>
+                        <p class="stat-value">${stats.negativeCount}</p>
+                    </div>
+                    <div class="stat-mini-card">
+                        <h4>Negativity Rate</h4>
+                        <p class="stat-value">${stats.negativePercentage}%</p>
+                    </div>
+                    <div class="stat-mini-card">
+                        <h4>Avg Sentiment</h4>
+                        <p class="stat-value">${stats.avgSentiment.toFixed(
+                          2
+                        )}</p>
+                    </div>
+                </div>
 
-        const stats = this.data.processedStats;
-        const chartData = {
-            labels: ['High Severity', 'Medium Severity', 'Low Severity'],
-            datasets: [{
-                data: [
-                    stats.highSeverityCount,
-                    stats.mediumSeverityCount,
-                    stats.lowSeverityCount
-                ],
-                backgroundColor: [
-                    '#EF4444',
-                    '#F59E0B',
-                    '#10B981'
-                ],
-                borderWidth: 0
-            }]
-        };
+                <!-- Comments List -->
+                <div class="comments-list">
+                    <h3>Negative Comments (${negativeComments.length})</h3>
+                    ${negativeComments
+                      .map(
+                        (comment) => `
+                        <div class="comment-card">
+                            <div class="comment-header">
+                                <span class="comment-author">@${this.escapeHtml(
+                                  comment.author_username
+                                )}</span>
+                                <span class="comment-date">${new Date(
+                                  comment.created_at_platform
+                                ).toLocaleDateString()}</span>
+                            </div>
+                            <p class="comment-content">${this.escapeHtml(
+                              comment.content
+                            )}</p>
+                            <div class="comment-footer">
+                                <span class="emotion-badge emotion-${
+                                  comment.dominant_emotion
+                                }">
+                                    ${comment.dominant_emotion}
+                                </span>
+                                <span class="sentiment-score">
+                                    Sentiment: ${
+                                      comment.sentiment_score
+                                        ? comment.sentiment_score.toFixed(2)
+                                        : "N/A"
+                                    }
+                                </span>
+                                <span class="likes-count">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                    </svg>
+                                    ${comment.likes_count || 0}
+                                </span>
+                            </div>
+                            ${
+                              comment.detected_slang &&
+                              comment.detected_slang.length > 0
+                                ? `
+                                <div class="slang-detected">
+                                    <strong>Slang detected:</strong> 
+                                    ${comment.detected_slang
+                                      .map((s) => s.term)
+                                      .join(", ")}
+                                </div>
+                            `
+                                : ""
+                            }
+                        </div>
+                    `
+                      )
+                      .join("")}
+                </div>
+            </div>
+        `;
 
-        this.chartManager.createEmotionChart('severityChart', chartData);
-    }
+    document.body.appendChild(modal);
 
-    /**
-     * Render trigger words chart
-     */
-    renderTriggerWordsChart() {
-        if (!this.data) return;
+    // Close on overlay click
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
+  }
 
-        const triggerWords = this.data.processedStats.triggerWords;
-        
-        const chartData = {
-            labels: triggerWords.map(t => t.word),
-            datasets: [{
-                label: 'Frequency',
-                data: triggerWords.map(t => t.count),
-                backgroundColor: 'rgba(239, 68, 68, 0.8)',
-                borderColor: '#EF4444',
-                borderWidth: 2
-            }]
-        };
+  /**
+   * Remove event listeners
+   */
+  removeEventListeners() {
+    const elements = [
+      { id: "dateRangeFilter", handler: "dateRange" },
+      { id: "platformFilter", handler: "platform" },
+      { id: "severityFilter", handler: "severity" },
+      { id: "exportTriggersCSV", handler: "export" },
+      { id: "refreshTriggers", handler: "refresh" },
+    ];
 
-        this.chartManager.createSlangChart('triggerWordsChart', chartData);
-    }
+    elements.forEach(({ id, handler }) => {
+      const element = document.getElementById(id);
+      if (element && this.boundHandlers[handler]) {
+        element.removeEventListener("change", this.boundHandlers[handler]);
+        element.removeEventListener("click", this.boundHandlers[handler]);
+      }
+    });
+  }
 
-    /**
-     * Attach event listeners
-     */
-    attachEventListeners() {
-        this.removeEventListeners();
+  /**
+   * Handle date range change
+   */
+  async handleDateRangeChange(dateRange) {
+    this.filters.dateRange = dateRange;
+    await this.refresh();
+  }
 
-        // Date range filter
-        const dateRangeSelect = document.getElementById('dateRangeFilter');
-        if (dateRangeSelect) {
-            this.boundHandlers.dateRange = (e) => this.handleDateRangeChange(parseInt(e.target.value));
-            dateRangeSelect.addEventListener('change', this.boundHandlers.dateRange);
-        }
+  /**
+   * Handle platform filter
+   */
+  async handlePlatformFilter(platform) {
+    this.filters.platform = platform;
+    await this.refresh();
+  }
 
-        // Platform filter
-        const platformSelect = document.getElementById('platformFilter');
-        if (platformSelect) {
-            this.boundHandlers.platform = (e) => this.handlePlatformFilter(e.target.value);
-            platformSelect.addEventListener('change', this.boundHandlers.platform);
-        }
+  /**
+   * Handle severity filter
+   */
+  async handleSeverityFilter(severity) {
+    this.filters.severity = severity;
+    await this.refresh();
+  }
 
-        // Severity filter
-        const severitySelect = document.getElementById('severityFilter');
-        if (severitySelect) {
-            this.boundHandlers.severity = (e) => this.handleSeverityFilter(e.target.value);
-            severitySelect.addEventListener('change', this.boundHandlers.severity);
-        }
+  /**
+   * Export triggers to CSV
+   */
+  exportToCSV() {
+    if (!this.data) return;
 
-        // Export button
-        const exportBtn = document.getElementById('exportTriggersCSV');
-        if (exportBtn) {
-            this.boundHandlers.export = () => this.exportToCSV();
-            exportBtn.addEventListener('click', this.boundHandlers.export);
-        }
+    const triggers = this.data.negativeTriggers;
+    const headers = [
+      "Content",
+      "Platform",
+      "Date",
+      "Severity",
+      "Trigger Score",
+      "Negative %",
+      "Total Comments",
+      "Negative Comments",
+      "Engagement",
+    ];
+    const rows = triggers.map((post) => [
+      `"${(post.content || "").replace(/"/g, '""')}"`,
+      post.platform || "twitter",
+      new Date(post.created_at).toLocaleDateString(),
+      post.severity,
+      post.triggerScore.toFixed(2),
+      post.negativePercentage.toFixed(1) + "%",
+      post.totalComments || 0,
+      post.negativeComments || 0,
+      post.engagement || 0,
+    ]);
 
-        // Refresh button
-        const refreshBtn = document.getElementById('refreshTriggers');
-        if (refreshBtn) {
-            this.boundHandlers.refresh = () => this.refresh();
-            refreshBtn.addEventListener('click', this.boundHandlers.refresh);
-        }
-    }
+    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `negative-triggers-${
+      new Date().toISOString().split("T")[0]
+    }.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
-    /**
-     * Remove event listeners
-     */
-    removeEventListeners() {
-        const elements = [
-            { id: 'dateRangeFilter', handler: 'dateRange' },
-            { id: 'platformFilter', handler: 'platform' },
-            { id: 'severityFilter', handler: 'severity' },
-            { id: 'exportTriggersCSV', handler: 'export' },
-            { id: 'refreshTriggers', handler: 'refresh' }
-        ];
+  /**
+   * Refresh dashboard
+   */
+  async refresh() {
+    await this.render();
+  }
 
-        elements.forEach(({ id, handler }) => {
-            const element = document.getElementById(id);
-            if (element && this.boundHandlers[handler]) {
-                element.removeEventListener('change', this.boundHandlers[handler]);
-                element.removeEventListener('click', this.boundHandlers[handler]);
-            }
-        });
-    }
-
-    /**
-     * Handle date range change
-     */
-    async handleDateRangeChange(dateRange) {
-        this.filters.dateRange = dateRange;
-        await this.refresh();
-    }
-
-    /**
-     * Handle platform filter
-     */
-    handlePlatformFilter(platform) {
-        this.filters.platform = platform;
-        this.updateTriggersTable();
-    }
-
-    /**
-     * Handle severity filter
-     */
-    handleSeverityFilter(severity) {
-        this.filters.severity = severity;
-        this.updateTriggersTable();
-    }
-
-    /**
-     * Update triggers table with current filters
-     */
-    updateTriggersTable() {
-        const tableContainer = document.querySelector('.triggers-table-container');
-        if (!tableContainer) return;
-
-        tableContainer.innerHTML = this.getTriggersTableHTML();
-    }
-
-    /**
-     * Export triggers to CSV
-     */
-    exportToCSV() {
-        if (!this.data) return;
-
-        const triggers = this.getFilteredTriggers();
-        const headers = ['Content', 'Platform', 'Date', 'Severity', 'Trigger Score', 'Likes', 'Retweets', 'Replies', 'Engagement'];
-        const rows = triggers.map(post => [
-            `"${(post.content || '').replace(/"/g, '""')}"`,
-            post.platform || 'twitter',
-            new Date(post.created_at).toLocaleDateString(),
-            post.severity,
-            post.triggerScore.toFixed(2),
-            post.likes_count || 0,
-            post.retweets_count || 0,
-            post.replies_count || 0,
-            post.engagement || 0
-        ]);
-
-        const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `negative-triggers-${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
-    /**
-     * Refresh dashboard
-     */
-    async refresh() {
-        await this.render();
-    }
-
-    /**
-     * Get filtered triggers based on current filters
-     */
-    getFilteredTriggers() {
-        if (!this.data) return [];
-
-        let triggers = this.data.processedStats.triggersWithSeverity;
-
-        // Apply severity filter
-        if (this.filters.severity !== 'all') {
-            triggers = triggers.filter(t => t.severity === this.filters.severity);
-        }
-
-        // Apply platform filter
-        if (this.filters.platform !== 'all') {
-            triggers = triggers.filter(t => t.platform?.toLowerCase() === this.filters.platform);
-        }
-
-        return triggers;
-    }
-
-    /**
-     * Get main HTML structure
-     */
-    getHTML() {
-        return `
+  /**
+   * Get main HTML structure
+   */
+  getHTML() {
+    return `
             <div class="dashboard-header">
                 <div>
                     <h1>Negative Triggers</h1>
-                    <p class="subtitle">Identify posts that triggered negative reactions</p>
+                    <p class="subtitle">Posts flagged based on negative comment emotions (≥25% threshold)</p>
                 </div>
                 <div style="display: flex; gap: 12px;">
                     <button id="exportTriggersCSV" class="btn-export">
@@ -463,28 +513,50 @@ class NegativeTriggersBoard {
             <!-- Filter Controls -->
             <div class="filter-controls">
                 <div class="filter-group">
-                    <label for="dateRangeFilter">Date Range:</label>
+                    <label for="dateRangeFilter">DATE RANGE:</label>
                     <select id="dateRangeFilter" class="filter-select">
-                        <option value="7">Last 7 days</option>
-                        <option value="30" selected>Last 30 days</option>
-                        <option value="90">Last 90 days</option>
+                        <option value="7" ${
+                          this.filters.dateRange === 7 ? "selected" : ""
+                        }>Last 7 days</option>
+                        <option value="30" ${
+                          this.filters.dateRange === 30 ? "selected" : ""
+                        }>Last 30 days</option>
+                        <option value="90" ${
+                          this.filters.dateRange === 90 ? "selected" : ""
+                        }>Last 90 days</option>
                     </select>
                 </div>
                 <div class="filter-group">
-                    <label for="platformFilter">Platform:</label>
+                    <label for="platformFilter">PLATFORM:</label>
                     <select id="platformFilter" class="filter-select">
-                        <option value="all">All Platforms</option>
-                        <option value="twitter">Twitter</option>
-                        <option value="instagram">Instagram</option>
+                        <option value="all" ${
+                          this.filters.platform === "all" ? "selected" : ""
+                        }>All Platforms</option>
+                        <option value="twitter" ${
+                          this.filters.platform === "twitter" ? "selected" : ""
+                        }>Twitter</option>
+                        <option value="instagram" ${
+                          this.filters.platform === "instagram"
+                            ? "selected"
+                            : ""
+                        }>Instagram</option>
                     </select>
                 </div>
                 <div class="filter-group">
-                    <label for="severityFilter">Severity:</label>
+                    <label for="severityFilter">SEVERITY:</label>
                     <select id="severityFilter" class="filter-select">
-                        <option value="all">All Severity</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
+                        <option value="all" ${
+                          this.filters.severity === "all" ? "selected" : ""
+                        }>All Severity</option>
+                        <option value="high" ${
+                          this.filters.severity === "high" ? "selected" : ""
+                        }>High</option>
+                        <option value="medium" ${
+                          this.filters.severity === "medium" ? "selected" : ""
+                        }>Medium</option>
+                        <option value="low" ${
+                          this.filters.severity === "low" ? "selected" : ""
+                        }>Low</option>
                     </select>
                 </div>
             </div>
@@ -492,26 +564,14 @@ class NegativeTriggersBoard {
             <!-- Stats Grid -->
             <div class="stats-grid"></div>
 
-            <!-- Charts Grid -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 24px; margin-bottom: 32px;">
-                <!-- Severity Distribution -->
-                <div class="chart-card">
-                    <div class="chart-header">
-                        <h3>Severity Distribution</h3>
-                    </div>
-                    <div class="chart-container" style="min-height: 300px;">
-                        <canvas id="severityChart"></canvas>
-                    </div>
+            <!-- Severity Distribution Chart -->
+            <div class="chart-card" style="margin-bottom: 32px;">
+                <div class="chart-header">
+                    <h3>Severity Distribution</h3>
+                    <p class="chart-subtitle">High: ≥60% negative | Medium: 40-60% | Low: 25-40%</p>
                 </div>
-
-                <!-- Common Trigger Words -->
-                <div class="chart-card">
-                    <div class="chart-header">
-                        <h3>Common Trigger Words</h3>
-                    </div>
-                    <div class="chart-container" style="min-height: 300px;">
-                        <canvas id="triggerWordsChart"></canvas>
-                    </div>
+                <div class="chart-container" style="min-height: 300px;">
+                    <canvas id="severityChart"></canvas>
                 </div>
             </div>
 
@@ -519,97 +579,120 @@ class NegativeTriggersBoard {
             <div class="section">
                 <div class="section-header">
                     <h2>Negative Trigger Posts</h2>
+                    <p class="section-subtitle">Posts with ≥25% negative comments</p>
                 </div>
-                <div class="triggers-table-container">
-                    ${this.getTriggersTableHTML()}
-                </div>
+                ${this.getTriggersTableHTML()}
             </div>
         `;
+  }
+
+  /**
+   * Get triggers table HTML
+   */
+  getTriggersTableHTML() {
+    const triggers = this.data.negativeTriggers || [];
+
+    if (triggers.length === 0) {
+      return '<p class="no-data">No negative triggers found for the selected filters</p>';
     }
 
-    /**
-     * Get triggers table HTML
-     */
-    getTriggersTableHTML() {
-        const triggers = this.getFilteredTriggers();
-
-        if (triggers.length === 0) {
-            return '<p class="no-data">No negative triggers found</p>';
-        }
-
-        return `
+    return `
             <table class="posts-table">
                 <thead>
                     <tr class="table-header">
                         <th>Post Content</th>
                         <th>Severity</th>
-                        <th>Trigger Score</th>
+                        <th>Negative %</th>
+                        <th>Comments</th>
                         <th>Platform</th>
                         <th>Date</th>
-                        <th>Engagement</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${triggers.slice(0, 20).map(post => `
+                    ${triggers
+                      .map(
+                        (post) => `
                         <tr class="table-row">
                             <td class="content-cell">
-                                ${this.escapeHtml((post.content || '').substring(0, 80))}${(post.content || '').length > 80 ? '...' : ''}
+                                ${this.escapeHtml(
+                                  (post.content || "").substring(0, 100)
+                                )}${
+                          (post.content || "").length > 100 ? "..." : ""
+                        }
                             </td>
                             <td>
-                                <span class="severity-badge severity-${post.severity}">
+                                <span class="severity-badge severity-${
+                                  post.severity
+                                }">
                                     ${post.severity}
                                 </span>
                             </td>
-                            <td>${post.triggerScore.toFixed(1)}</td>
                             <td>
-                                <span class="platform-badge ${post.platform || 'twitter'}">
-                                    ${post.platform || 'twitter'}
+                                <strong>${post.negativePercentage.toFixed(
+                                  1
+                                )}%</strong>
+                                <br/>
+                                <small class="text-muted">(${
+                                  post.negativeComments
+                                }/${post.totalComments})</small>
+                            </td>
+                            <td>${post.totalComments}</td>
+                            <td>
+                                <span class="platform-badge ${
+                                  post.platform || "twitter"
+                                }">
+                                    ${post.platform || "twitter"}
                                 </span>
                             </td>
-                            <td>${new Date(post.created_at).toLocaleDateString()}</td>
-                            <td class="engagement-cell">${this.formatEngagement(post.engagement || 0)}</td>
+                            <td>${new Date(
+                              post.created_at
+                            ).toLocaleDateString()}</td>
+                            <td>
+                                <button class="view-negative-comments-btn btn-small" data-post-id="${
+                                  post.id
+                                }">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                    View Comments
+                                </button>
+                            </td>
                         </tr>
-                    `).join('')}
+                    `
+                      )
+                      .join("")}
                 </tbody>
             </table>
         `;
-    }
+  }
 
-    /**
-     * Format engagement numbers
-     */
-    formatEngagement(num) {
-        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-        return num.toString();
-    }
+  /**
+   * Escape HTML
+   */
+  escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
 
-    /**
-     * Escape HTML
-     */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    /**
-     * Get loading HTML
-     */
-    getLoadingHTML() {
-        return `
+  /**
+   * Get loading HTML
+   */
+  getLoadingHTML() {
+    return `
             <div class="loading-state">
                 <div class="spinner"></div>
                 <p>Loading negative triggers analysis...</p>
             </div>
         `;
-    }
+  }
 
-    /**
-     * Get error HTML
-     */
-    getErrorHTML(message) {
-        return `
+  /**
+   * Get error HTML
+   */
+  getErrorHTML(message) {
+    return `
             <div class="error-state">
                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
@@ -621,15 +704,15 @@ class NegativeTriggersBoard {
                 <button onclick="window.location.reload()" class="btn-primary">Retry</button>
             </div>
         `;
-    }
+  }
 
-    /**
-     * Cleanup
-     */
-    destroy() {
-        this.removeEventListeners();
-        this.chartManager.destroyAll();
-    }
+  /**
+   * Cleanup
+   */
+  destroy() {
+    this.removeEventListeners();
+    this.chartManager.destroyAll();
+  }
 }
 
 // Create global instance
