@@ -17,6 +17,7 @@ class OverviewDashboard {
     this.chartManager = window.chartManager;
     this.statCards = window.statCards || new StatCards();
     this.data = null;
+    this.postsDisplayLimit = 5; // Start with 5 posts
   }
 
   /**
@@ -92,7 +93,7 @@ class OverviewDashboard {
       const [overviewData, topPosts, slangData, emotionData] =
         await Promise.all([
           window.api.request("/api/v1/analytics/overview"),
-          window.api.getTopPosts(5),
+          window.api.getTopPosts(100), // Load more posts to enable Show More functionality
           window.api.getSlangAnalysis(),
           window.api.request("/api/v1/analytics/emotion-analysis"),
         ]);
@@ -282,6 +283,9 @@ class OverviewDashboard {
       });
     });
 
+    // Show More/Less Posts buttons
+    this.attachPostsToggleHandlers();
+
     // Close comments modal
     const modalClose = document.getElementById("close-comments-modal");
     if (modalClose) {
@@ -296,6 +300,64 @@ class OverviewDashboard {
           this.closeCommentsModal();
         }
       });
+    }
+  }
+
+  /**
+   * Attach Show More/Less posts handlers
+   */
+  attachPostsToggleHandlers() {
+    const showMoreBtn = document.getElementById("showMorePosts");
+    if (showMoreBtn) {
+      showMoreBtn.addEventListener("click", () => this.showMorePosts());
+    }
+
+    const showLessBtn = document.getElementById("showLessPosts");
+    if (showLessBtn) {
+      showLessBtn.addEventListener("click", () => this.showLessPosts());
+    }
+  }
+
+  /**
+   * Show more posts (increase limit by 5)
+   */
+  showMorePosts() {
+    this.postsDisplayLimit += 5;
+    this.updatePostsDisplay();
+  }
+
+  /**
+   * Show less posts (decrease limit by 5, minimum 5)
+   */
+  showLessPosts() {
+    this.postsDisplayLimit = Math.max(5, this.postsDisplayLimit - 5);
+    this.updatePostsDisplay();
+  }
+
+  /**
+   * Update posts display after changing limit
+   */
+  updatePostsDisplay() {
+    const postsContainer = document.querySelector(".posts-grid");
+    if (postsContainer) {
+      postsContainer.innerHTML = this.getTopPostsHTML();
+      // Reattach event listeners for comment buttons
+      const commentButtons = document.querySelectorAll(".btn-view-comments");
+      commentButtons.forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const postId = btn.dataset.postId;
+          await this.viewPostComments(postId);
+        });
+      });
+    }
+
+    // Update the buttons container
+    const buttonsContainer = document.querySelector(".posts-toggle-buttons");
+    if (buttonsContainer) {
+      buttonsContainer.innerHTML = this.getPostsToggleButtonsHTML();
+      this.attachPostsToggleHandlers();
     }
   }
 
@@ -693,10 +755,12 @@ class OverviewDashboard {
             <div class="section">
                 <div class="section-header">
                     <h2>Top Performing Posts</h2>
-                    <a href="#" class="view-all">View All</a>
                 </div>
                 <div class="posts-grid">
                     ${this.getTopPostsHTML()}
+                </div>
+                <div class="posts-toggle-buttons">
+                    ${this.getPostsToggleButtonsHTML()}
                 </div>
             </div>
 
@@ -913,6 +977,46 @@ class OverviewDashboard {
   }
 
   /**
+   * Get posts toggle buttons HTML
+   */
+  getPostsToggleButtonsHTML() {
+    if (!this.data || !this.data.topPosts || this.data.topPosts.length === 0) {
+      return "";
+    }
+
+    const totalPosts = this.data.topPosts.length;
+    const hasMore = totalPosts > this.postsDisplayLimit;
+    const canShowLess = this.postsDisplayLimit > 5;
+
+    if (!hasMore && !canShowLess) {
+      return "";
+    }
+
+    return `
+      <div style="text-align: center; margin-top: 24px; display: flex; gap: 12px; justify-content: center;">
+        ${
+          canShowLess
+            ? `
+          <button id="showLessPosts" class="btn-secondary" style="padding: 12px 24px;">
+            Show Less
+          </button>
+        `
+            : ""
+        }
+        ${
+          hasMore
+            ? `
+          <button id="showMorePosts" class="btn-secondary" style="padding: 12px 24px;">
+            Show More Posts (${totalPosts - this.postsDisplayLimit} remaining)
+          </button>
+        `
+            : ""
+        }
+      </div>
+    `;
+  }
+
+  /**
    * Format date
    */
   formatDate(dateString) {
@@ -1006,7 +1110,10 @@ class OverviewDashboard {
 
     const emotionMetadata = this.getEmotionMetadata();
 
-    return this.data.topPosts
+    // Slice posts based on current display limit
+    const postsToDisplay = this.data.topPosts.slice(0, this.postsDisplayLimit);
+
+    return postsToDisplay
       .map((post) => {
         const emotion = post.emotion || post.dominant_emotion || "neutral";
         const emotionClass = this.getEmotionClass(emotion);
@@ -1127,8 +1234,10 @@ class OverviewDashboard {
                 ${
                   post.replies_count > 0
                     ? `
-                <button class="btn-view-comments" data-post-id="${post.id}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button class="btn-view-comments btn-secondary" data-post-id="${
+                  post.id
+                }" style="width: 100%; margin-top: 12px; justify-content: center; display: inline-flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                     </svg>
                     View ${post.replies_count} ${

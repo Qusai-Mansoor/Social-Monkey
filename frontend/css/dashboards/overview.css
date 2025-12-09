@@ -417,3 +417,23 @@
     gap: 0.75rem;
   }
 }
+
+/* Posts Toggle Buttons */
+.posts-toggle-buttons {
+  margin-top: 24px;
+  transition: all 0.3s ease;
+}
+
+.posts-toggle-buttons button {
+  transition: all 0.3s ease;
+}
+
+.posts-toggle-buttons button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
+/* Smooth height transitions for posts grid */
+.posts-grid {
+  transition: all 0.3s ease;
+}

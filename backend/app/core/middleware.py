@@ -68,7 +68,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Implements token bucket algorithm
     """
     
-    def __init__(self, app: ASGIApp, requests_per_minute: int = 300):  # Increased for development
+    def __init__(self, app: ASGIApp, requests_per_minute: int = 1000):  # Increased for development
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
         self.requests = defaultdict(list)
@@ -140,7 +140,7 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
     Prevents brute force attacks on login/register
     """
     
-    def __init__(self, app: ASGIApp, auth_attempts_per_minute: int = 10):
+    def __init__(self, app: ASGIApp, auth_attempts_per_minute: int = 30):
         super().__init__(app)
         self.auth_attempts_per_minute = auth_attempts_per_minute
         self.auth_attempts = defaultdict(list)
