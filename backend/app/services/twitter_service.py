@@ -3,6 +3,7 @@ import tweepy
 import hashlib
 import base64
 import requests
+import httpx
 import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -37,6 +38,11 @@ class TwitterService:
         self.callback_url = settings.TWITTER_CALLBACK_URL
         self.bearer_token = settings.TWITTER_BEARER_TOKEN
         self.oauth_handler = None  # Store the handler to maintain state
+        
+        # RapidAPI Configuration
+        self.rapidapi_key = settings.RAPIDAPI_KEY
+        self.rapidapi_host = settings.RAPIDAPI_TWITTER_HOST
+        self.rapidapi_base_url = f"https://{self.rapidapi_host}"
         
         # Rate limiting tracking - persistent across requests
         self.rate_limit_file = Path("twitter_rate_limits.json")
@@ -286,21 +292,9 @@ class TwitterService:
         self, 
         social_account: SocialAccount, 
         db: Session,
-        max_results: int = 50  # Reduced default to avoid rate limits
+        max_results: int = 50
     ) -> Dict[str, int]:
-        """Fetch user's tweets and store in database"""
-        # Decrypt token
-        access_token = token_encryption.decrypt(social_account.access_token)
-        
-        # Create client with OAuth access token (not bearer token)
-        client = tweepy.Client(
-            access_token=access_token,
-            access_token_secret=None,  # For OAuth 2.0, this is None
-            consumer_key=self.client_id,
-            consumer_secret=self.client_secret,
-            bearer_token=self.bearer_token
-        )
-        print("Tweepy client created for fetching tweets")
+        """Fetch user's tweets using RapidAPI and store in database"""
         
         try:
             # Check rate limits before making the request
@@ -309,80 +303,98 @@ class TwitterService:
                 wait_minutes = round(wait_time / 60, 1)
                 return {"posts_created": 0, "error": f"Rate limit reached for fetching tweets. Please wait {wait_minutes} minutes before trying again."}
 
-            # Fetch tweets with smaller batch size to avoid rate limits
-            tweets = client.get_users_tweets(
-                id=social_account.platform_user_id,
-                max_results=min(max_results, 10),  # Reduced to 10 to be more conservative
-                tweet_fields=['created_at', 'public_metrics', 'lang', 'conversation_id', 'in_reply_to_user_id'],
-                exclude=['retweets']  # Remove 'replies' from exclude to get all tweets
-            )
-        
-        except tweepy.TooManyRequests as e:
-            # Get the reset time from the response headers
-            reset_time = None
-            if hasattr(e.response, 'headers') and 'x-rate-limit-reset' in e.response.headers:
-                reset_time = datetime.fromtimestamp(int(e.response.headers['x-rate-limit-reset']))
-                wait_time = (reset_time - datetime.now()).total_seconds()
-                wait_minutes = round(wait_time / 60, 1)
-                error_msg = f"Rate limit exceeded. Please wait {wait_minutes} minutes before trying again."
-            else:
-                error_msg = "Rate limit exceeded. Please wait 15 minutes before trying again."
+            # Use RapidAPI to fetch user timeline
+            headers = {
+                "x-rapidapi-key": self.rapidapi_key,
+                "x-rapidapi-host": self.rapidapi_host
+            }
             
-            print(f"Rate limit error: {error_msg}")
+            params = {
+                "screenname": social_account.platform_username,
+                "count": str(min(max_results, 40))  # RapidAPI supports up to 40 per request
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.rapidapi_base_url}/timeline.php",
+                    headers=headers,
+                    params=params,
+                    timeout=30.0
+                )
+            
+            if response.status_code != 200:
+                error_msg = f"RapidAPI request failed: {response.status_code} - {response.text}"
+                print(error_msg)
+                return {"posts_created": 0, "error": error_msg}
+            
+            data = response.json()
+            
+            if data.get("status") != "ok":
+                error_msg = f"RapidAPI returned error status: {data.get('status')}"
+                print(error_msg)
+                return {"posts_created": 0, "error": error_msg}
+            
+        except httpx.HTTPError as e:
+            error_msg = f"HTTP error occurred: {str(e)}"
+            print(error_msg)
             return {"posts_created": 0, "error": error_msg}
-            
-        except tweepy.Unauthorized as e:
-            print(f"Unauthorized access: {e}")
-            return {"posts_created": 0, "error": "Unauthorized access. Please re-authenticate."}
-        
+        except Exception as e:
+            error_msg = f"Error fetching tweets: {str(e)}"
+            print(error_msg)
+            return {"posts_created": 0, "error": error_msg}
         
         posts_created = 0
+        timeline = data.get("timeline", [])
 
-        if tweets and tweets.data:
-            for tweet in tweets.data:
-                # Skip if this is a reply to anyone (including self-replies)
-                # We only want original posts here, not replies
-                if tweet.in_reply_to_user_id:
+        if timeline:
+            for tweet_data in timeline:
+                tweet_id = tweet_data.get("tweet_id")
+                
+                if not tweet_id:
                     continue
 
                 # Check if post already exists
                 existing_post = db.query(Post).filter(
-                    Post.platform_post_id == str(tweet.id)
+                    Post.platform_post_id == tweet_id
                 ).first()
 
                 if existing_post:
-                    # Update existing post metrics (likes, retweets, replies)
-                    existing_post.likes_count = tweet.public_metrics.get('like_count', 0) if tweet.public_metrics else 0
-                    existing_post.retweets_count = tweet.public_metrics.get('retweet_count', 0) if tweet.public_metrics else 0
-                    existing_post.replies_count = tweet.public_metrics.get('reply_count', 0) if tweet.public_metrics else 0
+                    # Update existing post metrics
+                    existing_post.likes_count = tweet_data.get("favorites", 0)
+                    existing_post.retweets_count = tweet_data.get("retweets", 0)
+                    existing_post.replies_count = tweet_data.get("replies", 0)
                     existing_post.updated_at = datetime.now()
                     continue
 
+                # Get tweet content
+                content = tweet_data.get("text", "")
+                
                 # Preprocess content
-                preprocessed_text, language = text_preprocessor.preprocess(tweet.text)
+                preprocessed_text, language = text_preprocessor.preprocess(content)
 
                 # Module 2 & 3: Analyze Emotion and Slang
-                # We use the raw text for emotion analysis to capture nuance
-                emotion_result = analyze_emotion(tweet.text)
-                # Use new SlangNormalizer - convert to old format for DB compatibility
+                emotion_result = analyze_emotion(content)
                 normalizer = SlangNormalizer.get_instance()
-                detected_slang = normalizer.detect_slang(tweet.text)
+                detected_slang = normalizer.detect_slang(content)
                 slang_result = [{"term": s["text"], "meaning": s["normalized"]} for s in detected_slang]
+
+                # Parse created_at timestamp
+                created_at = self._parse_twitter_date(tweet_data.get("created_at"))
 
                 # Create post
                 post = Post(
                     social_account_id=social_account.id,
-                    platform_post_id=str(tweet.id),
-                    content=tweet.text,
-                    raw_data=tweet.data,
+                    platform_post_id=tweet_id,
+                    content=content,
+                    raw_data=tweet_data,
                     preprocessed_content=preprocessed_text,
-                    language=language or tweet.lang,
-                    created_at_platform=tweet.created_at,
-                    likes_count=tweet.public_metrics.get('like_count', 0) if tweet.public_metrics else 0,
-                    retweets_count=tweet.public_metrics.get('retweet_count', 0) if tweet.public_metrics else 0,
-                    replies_count=tweet.public_metrics.get('reply_count', 0) if tweet.public_metrics else 0,
+                    language=language or tweet_data.get("lang", "en"),
+                    created_at_platform=created_at,
+                    likes_count=tweet_data.get("favorites", 0),
+                    retweets_count=tweet_data.get("retweets", 0),
+                    replies_count=tweet_data.get("replies", 0),
                     is_preprocessed=True,
-                    # New fields
+                    # Emotion and Slang fields
                     emotion_scores=emotion_result["scores"],
                     dominant_emotion=emotion_result["dominant"],
                     sentiment_score=emotion_result["sentiment_score"],
@@ -400,7 +412,7 @@ class TwitterService:
                 print(f"Error committing posts to database: {e}")
                 return {"posts_created": 0, "error": f"Database error: {str(e)}"}
         else:
-            print("No tweets found or empty response")
+            print("No tweets found in timeline")
 
         return {"posts_created": posts_created}
     
@@ -409,26 +421,9 @@ class TwitterService:
         post: Post,
         social_account: SocialAccount,
         db: Session,
-        max_results: int = 20  # Reduced to avoid rate limits
+        max_results: int = 20
     ) -> int:
-        """Fetch replies to a specific tweet"""
-        # Decrypt token
-        access_token = token_encryption.decrypt(social_account.access_token)
-        
-        # Create client with OAuth access token 
-        client = tweepy.Client(
-            access_token=access_token,
-            access_token_secret=None,
-            consumer_key=self.client_id,
-            consumer_secret=self.client_secret,
-            bearer_token=self.bearer_token,
-            
-        )
-        print("Tweepy client created for fetching replies")
-        #print("Rate limit status:", client.rate_limit_status()['resources'])
-        # Search for replies using the correct Twitter API v2 syntax
-        # We search for tweets that are replies to this specific tweet ID
-        query = f"to:{social_account.platform_username} in_reply_to_tweet_id:{post.platform_post_id}"
+        """Fetch replies to a specific tweet using RapidAPI"""
         
         try:
             # Check rate limits before making the request
@@ -437,87 +432,105 @@ class TwitterService:
                 wait_minutes = round(wait_time / 60, 1)
                 raise ValueError(f"Rate limit reached for searching replies. Please wait {wait_minutes} minutes before trying again.")
 
-            replies = client.search_recent_tweets(
-                query=query,
-                max_results=min(max_results, 10),  # Reduced to 10 to be more conservative
-                tweet_fields=['created_at', 'public_metrics', 'author_id', 'in_reply_to_user_id', 'conversation_id'],
-                expansions=['author_id']
-            )
-        except tweepy.TooManyRequests as e:
-            # Get the reset time from the response headers
-            reset_time = None
-            if hasattr(e.response, 'headers') and 'x-rate-limit-reset' in e.response.headers:
-                reset_time = datetime.fromtimestamp(int(e.response.headers['x-rate-limit-reset']))
-                wait_time = (reset_time - datetime.now()).total_seconds()
-                wait_minutes = round(wait_time / 60, 1)
-                error_msg = f"Rate limit exceeded. Please wait {wait_minutes} minutes before trying again."
-            else:
-                error_msg = str(e)
-            print(f"Rate limit error for replies: {error_msg}")
+            # Use RapidAPI to fetch tweet thread (includes replies)
+            headers = {
+                "x-rapidapi-key": self.rapidapi_key,
+                "x-rapidapi-host": self.rapidapi_host
+            }
+            
+            params = {
+                "id": post.platform_post_id
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.rapidapi_base_url}/tweet_thread.php",
+                    headers=headers,
+                    params=params,
+                    timeout=30.0
+                )
+            
+            if response.status_code != 200:
+                error_msg = f"RapidAPI request failed: {response.status_code} - {response.text}"
+                print(error_msg)
+                raise ValueError(error_msg)
+            
+            data = response.json()
+            
+            # Check if thread data exists
+            thread = data.get("thread", [])
+            
+        except httpx.HTTPError as e:
+            error_msg = f"HTTP error occurred: {str(e)}"
+            print(error_msg)
             raise ValueError(error_msg)
-        except tweepy.Unauthorized as e:
-            print(f"Unauthorized access for replies: {e}")
-            raise ValueError(f"Unauthorized access: {str(e)}")
         except Exception as e:
-            print(f"Error fetching replies: {e}")
-            raise ValueError(f"Error fetching replies: {str(e)}")
+            error_msg = f"Error fetching replies: {str(e)}"
+            print(error_msg)
+            raise ValueError(error_msg)
         
         comments_created = 0
         
         try:
-            if replies and replies.data:
-                # Get author data if available
-                author_data = {}
-                if replies.includes and 'users' in replies.includes:
-                    for user in replies.includes['users']:
-                        author_data[str(user.id)] = user.username
-
-                for reply in replies.data:
+            if thread:
+                for reply_data in thread:
+                    reply_id = reply_data.get("id")
+                    
+                    if not reply_id:
+                        continue
+                    
                     # Skip if it's the original tweet
-                    if str(reply.id) == post.platform_post_id:
+                    if reply_id == post.platform_post_id:
                         continue
 
                     # Only process if it's in the same conversation thread
-                    if str(reply.conversation_id) != post.platform_post_id:
+                    if str(reply_data.get("conversation_id")) != post.platform_post_id:
                         continue
 
                     # Check if comment already exists
                     existing_comment = db.query(Comment).filter(
-                        Comment.platform_comment_id == str(reply.id)
+                        Comment.platform_comment_id == reply_id
                     ).first()
 
                     if existing_comment:
                         # Update existing comment metrics
-                        existing_comment.likes_count = reply.public_metrics.get('like_count', 0) if reply.public_metrics else 0
+                        existing_comment.likes_count = reply_data.get("likes", 0)
                         existing_comment.updated_at = datetime.now()
                         continue
 
+                    # Get content
+                    content = reply_data.get("text", "")
+                    display_text = reply_data.get("display_text", content)
+                    
                     # Preprocess content
-                    preprocessed_text, language = text_preprocessor.preprocess(reply.text)
+                    preprocessed_text, language = text_preprocessor.preprocess(content)
 
                     # Module 2 & 3: Analyze Emotion and Slang
-                    emotion_result = analyze_emotion(reply.text)
-                    # Use new SlangNormalizer - convert to old format for DB compatibility
+                    emotion_result = analyze_emotion(content)
                     normalizer = SlangNormalizer.get_instance()
-                    detected_slang = normalizer.detect_slang(reply.text)
+                    detected_slang = normalizer.detect_slang(content)
                     slang_result = [{"term": s["text"], "meaning": s["normalized"]} for s in detected_slang]
 
-                    # Get author username from expanded data or fallback
-                    author_username = author_data.get(str(reply.author_id), f"user_{reply.author_id}")
+                    # Get author information
+                    author = reply_data.get("author", {})
+                    author_username = author.get("screen_name", f"user_{author.get('rest_id', 'unknown')}")
+
+                    # Parse created_at timestamp
+                    created_at = self._parse_twitter_date(reply_data.get("created_at"))
 
                     # Create comment
                     comment = Comment(
                         post_id=post.id,
-                        platform_comment_id=str(reply.id),
+                        platform_comment_id=reply_id,
                         author_username=author_username,
-                        content=reply.text,
-                        raw_data=reply.data,
+                        content=content,
+                        raw_data=reply_data,
                         preprocessed_content=preprocessed_text,
-                        language=language,
-                        created_at_platform=reply.created_at,
-                        likes_count=reply.public_metrics.get('like_count', 0) if reply.public_metrics else 0,
+                        language=language or reply_data.get("lang", "en"),
+                        created_at_platform=created_at,
+                        likes_count=reply_data.get("likes", 0),
                         is_preprocessed=True,
-                        # New fields
+                        # Emotion and Slang fields
                         emotion_scores=emotion_result["scores"],
                         dominant_emotion=emotion_result["dominant"],
                         sentiment_score=emotion_result["sentiment_score"],
@@ -530,7 +543,7 @@ class TwitterService:
                 db.commit()
                 print(f"Successfully created {comments_created} comments for post {post.id}")
             else:
-                print("No replies found")
+                print("No replies found in thread")
 
         except Exception as e:
             db.rollback()
@@ -538,6 +551,15 @@ class TwitterService:
             return 0
 
         return comments_created
+    
+    def _parse_twitter_date(self, date_str: str) -> datetime:
+        """Parse Twitter date string to datetime object"""
+        try:
+            # Twitter format: "Sat Nov 29 11:10:21 +0000 2025"
+            return datetime.strptime(date_str, "%a %b %d %H:%M:%S %z %Y")
+        except Exception as e:
+            print(f"Error parsing date {date_str}: {e}")
+            return datetime.now()
 
 
 # Global instance

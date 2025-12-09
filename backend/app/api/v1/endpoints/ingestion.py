@@ -31,7 +31,19 @@ async def ingest_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Ingest data from connected social media account"""
+    """
+    Sync/Ingest data from connected social media account using RapidAPI
+    
+    This endpoint fetches posts and comments for authenticated users.
+    
+    For Twitter:
+    1. Uses RapidAPI timeline endpoint to fetch user's posts
+    2. Uses RapidAPI thread endpoint to fetch replies/comments for each post
+    3. Performs emotion analysis and slang detection on all content
+    
+    Note: OAuth must be completed before syncing. The platform_username
+    from the OAuth flow is used to fetch data from RapidAPI.
+    """
     # Get social account
     social_account = db.query(SocialAccount).filter(
         SocialAccount.id == account_id,
@@ -46,7 +58,7 @@ async def ingest_data(
     
     try:
         if social_account.platform == "twitter":
-            # Step 1: Fetch posts
+            # Step 1: Fetch posts using RapidAPI timeline endpoint
             posts_result = await twitter_service.fetch_user_tweets(
                 social_account=social_account,
                 db=db,
@@ -58,7 +70,7 @@ async def ingest_data(
             
             posts_created = posts_result.get("posts_created", 0)
             
-            # Step 2: Fetch comments for each post
+            # Step 2: Fetch comments for each post using RapidAPI thread endpoint
             comments_created = 0
             errors = []
             rate_limited = False
@@ -106,10 +118,11 @@ async def ingest_data(
                     continue
             
             return {
-                "message": "Data ingestion completed",
+                "message": "Data sync completed successfully",
                 "platform": "twitter",
                 "posts_created": posts_created,
                 "comments_created": comments_created,
+                "data_source": "RapidAPI",
                 "errors": errors if errors else None
             }
         
