@@ -7341,25 +7341,6 @@
     "formality": "informal",
     "platform_origin": null
   },
-  "b": {
-    "canonical_form": "b",
-    "variations": ["B", "b"],
-    "full_form": null,
-    "description": "Be",
-    "normalized_text": "Be",
-    "category": null,
-    "sentiment": "neutral",
-    "intensity": "high",
-    "context": "A shortened form of the word 'be.'",
-    "multi_word": false,
-    "expansion_priority": "medium",
-    "part_of_speech": "noun",
-    "emoji_equivalents": [],
-    "example": "Just B yourself!",
-    "usage_type": null,
-    "formality": "informal",
-    "platform_origin": null
-  },
   "b&": {
     "canonical_form": "b&",
     "variations": ["B&", "b&"],

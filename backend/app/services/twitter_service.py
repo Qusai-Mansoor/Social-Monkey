@@ -377,6 +377,12 @@ class TwitterService:
                 normalizer = SlangNormalizer.get_instance()
                 detected_slang = normalizer.detect_slang(content)
                 slang_result = [{"term": s["text"], "meaning": s["normalized"]} for s in detected_slang]
+                
+                # Apply slang normalization to preprocessed text only for detected slang
+                if detected_slang:
+                    for slang_item in detected_slang:
+                        # Replace detected slang with normalized form in preprocessed_text
+                        preprocessed_text = preprocessed_text.replace(slang_item["text"], slang_item["normalized"])
 
                 # Parse created_at timestamp
                 created_at = self._parse_twitter_date(tweet_data.get("created_at"))
@@ -510,6 +516,12 @@ class TwitterService:
                     normalizer = SlangNormalizer.get_instance()
                     detected_slang = normalizer.detect_slang(content)
                     slang_result = [{"term": s["text"], "meaning": s["normalized"]} for s in detected_slang]
+                    
+                    # Apply slang normalization to preprocessed text only for detected slang
+                    if detected_slang:
+                        for slang_item in detected_slang:
+                            # Replace detected slang with normalized form in preprocessed_text
+                            preprocessed_text = preprocessed_text.replace(slang_item["text"], slang_item["normalized"])
 
                     # Get author information
                     author = reply_data.get("author", {})
